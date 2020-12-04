@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+
+<launch>
+  <arg name="project" default="waypoint_driving"/>
+  
+  <!--- Sim Time -->
+  <param name="use_sim_time" value="false" />
+  
+  <!--- Start Node -->
+  <node pkg="$(arg project)" type="$(arg project)" name="$(arg project)" output="screen" respawn="true" />  
+  
+  <!--- Start Serial Node -->
+  <node pkg="rosserial_python" type="serial_node.py" name="argos_mr_core" output="screen">
+    <param name="port" value="/dev/ttyACM0"/>
+    <param name="baud" value="115200"/>
+  </node> 
+</launch>
