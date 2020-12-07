@@ -3,11 +3,11 @@
 <launch>
   <arg name="project" default="waypoint_driving"/>
   
-  <!--- Sim Time -->
-  <param name="use_sim_time" value="false" />
+  <!-- Parameters -->
+  <rosparam file="$(find waypoint_driving)/config/params.yaml" command="load" /> 
   
   <!--- Start Node -->
-  <node pkg="$(arg project)" type="$(arg project)" name="$(arg project)" output="screen" respawn="true" />  
+  <node pkg="$(arg project)" type="$(arg project)" name="$(arg project)" output="screen" respawn="false" />  
   
   <!--- Start Serial Node -->
   <node pkg="rosserial_python" type="serial_node.py" name="argos_mr_core" output="screen">

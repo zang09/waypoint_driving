@@ -3,18 +3,25 @@
 using namespace geometry_msgs;
 
 WaypointDriving::WaypointDriving() :
-    turn_mode_(false),
-    line_num_(0),
-    turn_rad_(1.25), //0.5
-    border_dist_(turn_rad_*2),
-    border_ang_(30*DEG2RAD),
-    beta_(0.5)
+    line_num_(0)
 {
+    initParams();
     subscribeAndPublish();
 }
 
 WaypointDriving::~WaypointDriving()
 {}
+
+void WaypointDriving::initParams()
+{
+    nh_.param<float>("/waypoint_driving/beta", beta_, 0.5);
+    nh_.param<float>("/waypoint_driving/mean_velocity", mean_vel_, 1.0);
+    nh_.param<float>("/waypoint_driving/turn_radius", turn_rad_, 1.25); //0.5
+    nh_.param<float>("/waypoint_driving/boundary_distance", border_dist_, 1.25); //turn_radius*2
+    nh_.param<double>("/waypoint_driving/border_angle", border_ang_, 30);
+    border_ang_ *= DEG2RAD;
+    nh_.param<float>("/waypoint_driving/virtual_point_distance", virtual_point_dist_, 2.0);
+}
 
 void WaypointDriving::subscribeAndPublish()
 {
@@ -22,7 +29,7 @@ void WaypointDriving::subscribeAndPublish()
     sub_current_odom_   = nh_.subscribe<nav_msgs::Odometry>("odom", 100, &WaypointDriving::odomHandler, this);
     pub_motor_vel_      = nh_.advertise<geometry_msgs::Twist>("argos_mr/motor_vel", 10);
     pub_line_strip_     = nh_.advertise<visualization_msgs::Marker>("flag/line", 1);
-    pub_virtual_points_ = nh_.advertise<visualization_msgs::Marker>("virtual/points", 1);
+    pub_virtual_point_  = nh_.advertise<visualization_msgs::Marker>("virtual/point", 1);
 }
 
 void WaypointDriving::waypointFlagHandler(const rviz_flag_plugin::PointArrayConstPtr &point_msg)
@@ -31,6 +38,10 @@ void WaypointDriving::waypointFlagHandler(const rviz_flag_plugin::PointArrayCons
     target_points_.assign(point_msg->points.begin(), point_msg->points.end());
 
     calculateLineSegment();
+
+    ROS_INFO("Line size: %d", (int)line_info_.size());
+
+    visualizationSegmentedLine();
 }
 
 void WaypointDriving::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
@@ -39,35 +50,31 @@ void WaypointDriving::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
     current_pose_.orientation = odom_msg->pose.pose.orientation;
     current_yaw_ = getYawFromQuaternion(current_pose_.orientation);
 
-    if(line_num_ < line_info_.size())
-        calculateTargetVel();
-
-    /*
     geometry_msgs::Twist vel;
-    vel.linear.x = current_pose_.position.x;
-    vel.linear.y = current_pose_.position.y;
-    pub_motor_vel_.publish(vel);
-    */
+
+    if(line_num_ < (int)line_info_.size())
+    {
+        double left_vel, right_vel;
+        calculateTargetVel(left_vel, right_vel);
+
+        vel.linear.x = left_vel;
+        vel.linear.y = right_vel;
+        pub_motor_vel_.publish(vel);
+
+        if(line_num_ >= (int)line_info_.size()) return;
+
+        visualizationVirtualPoint();
+    }
 }
 
 void WaypointDriving::calculateLineSegment()
 {
-    visualization_msgs::Marker line_strip;
-    line_strip.header.frame_id = "map";
-    line_strip.header.stamp = ros::Time::now();
-
-    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
-    line_strip.scale.x = 0.5;
-    line_strip.color.a = 1.0;
-    line_strip.color.r = (float)0.09412;
-    line_strip.color.g = (float)0.74118;
-    line_strip.color.b = (float)0.89412;
-    line_strip.pose.orientation.w = 1.0;
-
+    line_strip_.points.clear();
     line_info_.clear();
+
     for(size_t i=0; i<target_points_.size(); i++)
     {
-        line_strip.points.push_back(target_points_.at(i));
+        line_strip_.points.push_back(target_points_.at(i));
 
         if(i == 0)
         {
@@ -90,19 +97,32 @@ void WaypointDriving::calculateLineSegment()
             line_info_.push_back(line);
         }
     }
-
-    pub_line_strip_.publish(line_strip);
 }
 
-void WaypointDriving::calculateTargetVel()
+void WaypointDriving::visualizationSegmentedLine()
+{
+    line_strip_.header.frame_id = "map";
+    line_strip_.header.stamp = ros::Time::now();
+
+    line_strip_.type = visualization_msgs::Marker::LINE_STRIP;
+    line_strip_.scale.x = 0.5;
+    line_strip_.color.a = 1.0;
+    line_strip_.color.r = (float)0.09412;
+    line_strip_.color.g = (float)0.74118;
+    line_strip_.color.b = (float)0.89412;
+    line_strip_.pose.orientation.w = 1.0;
+
+    pub_line_strip_.publish(line_strip_);
+}
+
+void WaypointDriving::calculateTargetVel(double &left_vel, double &right_vel)
 {
     //Projection distance from line segment
     double projection_value = projectionLengthToLine(line_info_.at(line_num_).start_point,
                                                      line_info_.at(line_num_).end_point,
                                                      current_pose_.position);
 
-    double virtual_point_dist = 2.0;
-    double virtual_angle = atan2(projection_value, virtual_point_dist);
+    double virtual_angle = atan2(projection_value, virtual_point_dist_);
     double reference_angle = line_info_.at(line_num_).angle_rad - virtual_angle;
     double delta_angle = current_yaw_ - reference_angle;
 
@@ -113,26 +133,27 @@ void WaypointDriving::calculateTargetVel()
     double delta_y = current_pose_.position.y-line_info_.at(line_num_).end_point.y;
     double distance = sqrt(pow(delta_x,2)+pow(delta_y,2));
 
-    if(distance < turn_rad_) {
-        std::cout << "Distance: " << distance << ", " << turn_rad_ << std::endl;
+    if(distance < turn_rad_)
+    {
+        ROS_INFO("line: %d, distance: %.2f, turn radius: %.2f", (int)line_info_.size(), distance, turn_rad_);
         line_num_++;
     }
-    if(line_num_ >= line_info_.size()) return;
 
-    //not used
     double alpha = 0.05*beta_*abs(tanh(delta_angle/border_ang_));
-    double right_vel = (1-alpha)*mean_vel_ + alpha*mean_vel_*(-tanh(delta_angle/border_ang_));
-    double left_vel  = (1-alpha)*mean_vel_ + alpha*mean_vel_*(+tanh(delta_angle/border_ang_));
+    right_vel = (1-alpha)*mean_vel_ + alpha*mean_vel_*(-tanh(delta_angle/border_ang_));
+    left_vel  = (1-alpha)*mean_vel_ + alpha*mean_vel_*(+tanh(delta_angle/border_ang_));
+}
 
+void WaypointDriving::visualizationVirtualPoint()
+{
     Point project_p, virtual_p;
-    project_p = projectionToLine(line_info_.at(line_num_).start_point,
-                                 line_info_.at(line_num_).end_point,
-                                 current_pose_.position);
+    project_p = projectionPointToLine(line_info_.at(line_num_).start_point,
+                                      line_info_.at(line_num_).end_point,
+                                      current_pose_.position);
 
-    virtual_p.x = project_p.x + virtual_point_dist*cos(line_info_.at(line_num_).angle_rad);
-    virtual_p.y = project_p.y + virtual_point_dist*sin(line_info_.at(line_num_).angle_rad);
+    virtual_p.x = project_p.x + virtual_point_dist_*cos(line_info_.at(line_num_).angle_rad);
+    virtual_p.y = project_p.y + virtual_point_dist_*sin(line_info_.at(line_num_).angle_rad);
 
-    //Visualization Pointl
     visualization_msgs::Marker points;
     points.header.frame_id = "map";
     points.header.stamp = ros::Time::now();
@@ -144,23 +165,25 @@ void WaypointDriving::calculateTargetVel()
     points.color.a = points.color.r = 1.0;
     points.points.push_back(virtual_p);
 
-    pub_virtual_points_.publish(points);
+    pub_virtual_point_.publish(points);
 }
 
 double WaypointDriving::projectionLengthToLine(Point s_p, Point e_p, Point c_p)
 {
-    double delta_x = e_p.x - s_p.x;
-    double delta_y = e_p.y - s_p.y;
-    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
-    double sin_theta = delta_y / delat_l;
-    double cos_theta = delta_x / delat_l;
+    double angle  = atan2(e_p.y-s_p.y, e_p.x-s_p.x);
+    double value = -(c_p.x-s_p.x)*sin(angle) + (c_p.y-s_p.y)*cos(angle);
 
-    double result = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.x)*cos_theta;
+//    double delta_x = e_p.x - s_p.x;
+//    double delta_y = e_p.y - s_p.y;
+//    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
+//    double sin_theta = delta_y / delat_l;
+//    double cos_theta = delta_x / delat_l;
+//    double result = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
 
-    return result;
+    return value;
 }
 
-Point WaypointDriving::projectionToLine(Point s_p, Point e_p, Point c_p)
+Point WaypointDriving::projectionPointToLine(Point s_p, Point e_p, Point c_p)
 {
     double angle  = atan2(e_p.y-s_p.y, e_p.x-s_p.x);
     double value = -(c_p.x-s_p.x)*sin(angle) + (c_p.y-s_p.y)*cos(angle);

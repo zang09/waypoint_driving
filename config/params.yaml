@@ -1,0 +1,8 @@
+waypoint_driving:
+
+  beta: 0.5                     # chose 0.1~0.9 begger, turn faster
+  mean_velocity: 1.0            # straight speed [m/s]
+  turn_radius: 1.25             # 0.5 [m]
+  boundary_distance: 2.5        # turn_radius*2 
+  border_angle: 30              # [degree]
+  virtual_point_distance: 2.0
