@@ -28,6 +28,8 @@
 #define DOWN           8 
 
 #define ROS_BAUD       115200
+#define SERIAL_MONITOR 115200
+#define BLUTETOOTH      38400
 
 
 Servo vesc1_, vesc2_, vesc3_, vesc4_;
@@ -82,8 +84,8 @@ void setup()
   //nh_.advertise(vel_check_);
 
   //Serial 
-  Serial.begin(115200); 
-  Serial2.begin(38400); 
+  Serial.begin(SERIAL_MONITOR); 
+  Serial2.begin(BLUTETOOTH); 
 
   //Servo 
   pinMode(DC1_A_PIN,OUTPUT);     

@@ -14,13 +14,18 @@ WaypointDriving::~WaypointDriving()
 
 void WaypointDriving::initParams()
 {
+    nh_.param<bool>("/waypoint_driving/velocity_filter", velocity_filter_, true);
+    nh_.param<int>("/waypoint_driving/filter_size", filter_size_, 30);
     nh_.param<float>("/waypoint_driving/beta", beta_, 0.5);
     nh_.param<float>("/waypoint_driving/mean_velocity", mean_vel_, 1.0);
     nh_.param<float>("/waypoint_driving/turn_radius", turn_rad_, 1.25); //0.5
     nh_.param<float>("/waypoint_driving/boundary_distance", border_dist_, 1.25); //turn_radius*2
     nh_.param<double>("/waypoint_driving/border_angle", border_ang_, 30);
     border_ang_ *= DEG2RAD;
-    nh_.param<float>("/waypoint_driving/virtual_point_distance", virtual_point_dist_, 2.0);
+    nh_.param<float>("/waypoint_driving/virtual_point_distance", virtual_point_dist_, 1.5);
+
+    left_velocity_.resize(filter_size_);
+    right_velocity_.resize(filter_size_);
 }
 
 void WaypointDriving::subscribeAndPublish()
@@ -59,12 +64,21 @@ void WaypointDriving::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
 
         vel.linear.x = left_vel;
         vel.linear.y = right_vel;
-        pub_motor_vel_.publish(vel);
 
         if(line_num_ >= (int)line_info_.size()) return;
 
         visualizationVirtualPoint();
     }
+    else
+    {
+        vel.linear.x = 0.0;
+        vel.linear.y = 0.0;
+    }
+
+    if(velocity_filter_)
+        velocityFilter(vel);
+
+    pub_motor_vel_.publish(vel);
 }
 
 void WaypointDriving::calculateLineSegment()
@@ -139,7 +153,7 @@ void WaypointDriving::calculateTargetVel(double &left_vel, double &right_vel)
         line_num_++;
     }
 
-    double alpha = 0.05*beta_*abs(tanh(delta_angle/border_ang_));
+    double alpha = 0.05 + beta_*abs(tanh(delta_angle/border_ang_));
     right_vel = (1-alpha)*mean_vel_ + alpha*mean_vel_*(-tanh(delta_angle/border_ang_));
     left_vel  = (1-alpha)*mean_vel_ + alpha*mean_vel_*(+tanh(delta_angle/border_ang_));
 }
@@ -173,12 +187,12 @@ double WaypointDriving::projectionLengthToLine(Point s_p, Point e_p, Point c_p)
     double angle  = atan2(e_p.y-s_p.y, e_p.x-s_p.x);
     double value = -(c_p.x-s_p.x)*sin(angle) + (c_p.y-s_p.y)*cos(angle);
 
-//    double delta_x = e_p.x - s_p.x;
-//    double delta_y = e_p.y - s_p.y;
-//    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
-//    double sin_theta = delta_y / delat_l;
-//    double cos_theta = delta_x / delat_l;
-//    double result = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
+    //    double delta_x = e_p.x - s_p.x;
+    //    double delta_y = e_p.y - s_p.y;
+    //    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
+    //    double sin_theta = delta_y / delat_l;
+    //    double cos_theta = delta_x / delat_l;
+    //    double result = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
 
     return value;
 }
@@ -205,4 +219,26 @@ double WaypointDriving::getYawFromQuaternion(Quaternion q_msg)
     m.getRPY(roll, pitch, yaw);
 
     return yaw;
+}
+
+void WaypointDriving::velocityFilter(Twist &vel)
+{
+    left_velocity_.pop_front();
+    right_velocity_.pop_front();
+
+    left_velocity_.push_back(vel.linear.x);
+    right_velocity_.push_back(vel.linear.y);
+
+    double left_sum=0, right_sum=0;
+    for (size_t i=0; i<filter_size_; i++)
+    {
+        left_sum += left_velocity_[i];
+        right_sum += right_velocity_[i];
+    }
+
+    double left_value = left_sum / filter_size_;
+    double right_value = right_sum / filter_size_;
+
+    vel.linear.x = left_value;
+    vel.linear.y = right_value;
 }

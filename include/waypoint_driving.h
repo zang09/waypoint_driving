@@ -38,6 +38,7 @@ public:
     double projectionLengthToLine(geometry_msgs::Point s_p, geometry_msgs::Point e_p, geometry_msgs::Point c_p);
     geometry_msgs::Point projectionPointToLine(geometry_msgs::Point s_p, geometry_msgs::Point e_p, geometry_msgs::Point c_p);
     double getYawFromQuaternion(geometry_msgs::Quaternion q_msg);
+    void velocityFilter(geometry_msgs::Twist &vel);
 
 private:
     // ROS
@@ -58,7 +59,12 @@ private:
     geometry_msgs::Point origin_point_;
     std::vector<geometry_msgs::Point> target_points_;
 
+    std::deque<double> left_velocity_;
+    std::deque<double> right_velocity_;
+
     int line_num_;
+    int filter_size_;
+    bool velocity_filter_;
 
     // Control Param
     float  beta_;               // chose 0.1~0.9 begger, turn faster
@@ -67,6 +73,7 @@ private:
     float  border_dist_;        // boundary distance
     double border_ang_;         // boundary angle (deg -> rad) turn angle difference satuated at border_ang_
     float  virtual_point_dist_;
+
 };
 
 #endif /* waypoint_driving_WAYPOINT_DRIVING_H_ */
