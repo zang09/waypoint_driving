@@ -70,6 +70,14 @@ int    cur_filter_sz_    = 0;
 int    progress_bar_     = 0;
 
 void veloCallback(const geometry_msgs::Twist &vel_msg);
+void dataParsing(String str);
+void funcParsing(char c);
+void setBLDCMotorManual();
+void setBLDCMotorAuto();
+void writeBLDCMotor(bool mode);
+void writeDCMotor();
+void changeFilterSz(double pwr_value);
+double veloFilter();
 
 ros::NodeHandle nh_;
 ros::Subscriber<geometry_msgs::Twist> vel_sub_("argos_mr/motor_vel", veloCallback);
@@ -99,9 +107,9 @@ void setup()
 
   //BLDC 
   vesc1_.attach(VESC1_PIN); 
-  vesc1_.attach(VESC2_PIN); 
-  vesc1_.attach(VESC3_PIN); 
-  vesc1_.attach(VESC4_PIN); 
+  vesc2_.attach(VESC2_PIN); 
+  vesc3_.attach(VESC3_PIN); 
+  vesc4_.attach(VESC4_PIN); 
 
   //init state
   progress_bar_  = 1;
@@ -336,8 +344,8 @@ void setBLDCMotorManual()
   pre_speed_ = cur_speed_;  
   pre_filter_sz_ = cur_filter_sz_;
   
-  //Serial.print("L: "); Serial.println(bldc1_val_); 
-  //Serial.print("R: "); Serial.println(bldc2_val_); 
+  Serial.print("L: "); Serial.println(bldc1_val_); 
+  Serial.print("R: "); Serial.println(bldc2_val_); 
 } 
 
 void setBLDCMotorAuto()
@@ -353,21 +361,20 @@ void setBLDCMotorAuto()
 
 void writeBLDCMotor(bool mode) 
 {   
-  if(mode)
+  if(mode == true)
   {
-    double bldc_val = 0;
     memset(pwr_array_, 0, sizeof(pwr_array_));
-    vesc1_.write(bldc_val); 
-    vesc1_.write(bldc_val); 
-    vesc1_.write(bldc_val); 
-    vesc1_.write(bldc_val); 
+    vesc1_.write(ctr_val_); 
+    vesc2_.write(ctr_val_); 
+    vesc3_.write(ctr_val_); 
+    vesc4_.write(ctr_val_); 
   }
   else
   {
     vesc1_.write(bldc1_val_); 
-    vesc1_.write(bldc2_val_); 
-    vesc1_.write(bldc3_val_); 
-    vesc1_.write(bldc4_val_); 
+    vesc2_.write(bldc2_val_); 
+    vesc3_.write(bldc3_val_); 
+    vesc4_.write(bldc4_val_); 
   }
 } 
 
@@ -399,7 +406,7 @@ void writeDCMotor()
     break;    
   }   
   
-  Serial.print("Vel: "); Serial.println(vel); 
+  //Serial.print("Vel: "); Serial.println(vel); 
 } 
 
 double veloFilter()
