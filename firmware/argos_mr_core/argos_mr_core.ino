@@ -152,16 +152,16 @@ void loop()
     } 
   } 
 
-//  if(auto_mode_) 
-//  {
-//    setBLDCMotorAuto();
-//
-//    writeBLDCMotor(emergency_mode_); 
-//
-//    writeDCMotor(); 
-//
-//    delay(10);
-//  } 
+  if(auto_mode_) 
+  {
+    setBLDCMotorAuto();
+
+    writeBLDCMotor(emergency_mode_); 
+
+    writeDCMotor(); 
+
+    delay(10); // test
+  } 
   
   nh_.spinOnce(); //ROS callback
 }
@@ -196,7 +196,8 @@ void dataParsing(String str)
 
 void funcParsing(char c)  
 {   
-  Serial.print("C: "); Serial.println(c); 
+  //Serial.print("Function: "); Serial.println(c); 
+  
   if (c == '1')  
   {  
     progress_bar_ = 1;
