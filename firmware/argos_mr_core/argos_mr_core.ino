@@ -49,6 +49,8 @@ double pre_angle_val_ = 0.0;
 double angle_val_     = 0.0; 
 double pre_vel_l_     = 0.0;
 double pre_vel_r_     = 0.0;
+double auto_left_vel_ = 0.0;
+double auto_right_vel_= 0.0;
 int    pre_max_val_   = 0; 
 int    cur_max_val_   = 0; 
 
@@ -81,7 +83,7 @@ void setup()
   nh_.getHardware()->setBaud(ROS_BAUD);
   nh_.initNode();
   nh_.subscribe(vel_sub_);
-  //nh_.advertise(vel_check_);
+  nh_.advertise(vel_check_);
 
   //Serial 
   Serial.begin(SERIAL_MONITOR); 
@@ -127,7 +129,7 @@ void loop()
         rx_data_start_ = false; 
         rx_string_ = ""; 
 
-        setBLDCMotor(auto_mode_); 
+        setBLDCMotorManual(); 
 
         writeBLDCMotor(emergency_mode_); 
 
@@ -149,17 +151,25 @@ void loop()
       funcParsing(c); 
     } 
   } 
+
+//  if(auto_mode_) 
+//  {
+//    setBLDCMotorAuto();
+//
+//    writeBLDCMotor(emergency_mode_); 
+//
+//    writeDCMotor(); 
+//
+//    delay(10);
+//  } 
   
-  //ROS callback
-  nh_.spinOnce();
+  nh_.spinOnce(); //ROS callback
 }
 
 void veloCallback(const geometry_msgs::Twist &vel_msg)
 {
-  motor_vel_.linear.x = vel_msg.linear.x;
-  motor_vel_.linear.y = vel_msg.linear.y;
-
-  //vel_check.publish(&motor_vel_);
+  auto_left_vel_ = vel_msg.linear.x;
+  auto_right_vel_ = vel_msg.linear.y;
 }
 
 void dataParsing(String str)  
@@ -186,6 +196,7 @@ void dataParsing(String str)
 
 void funcParsing(char c)  
 {   
+  Serial.print("C: "); Serial.println(c); 
   if (c == '1')  
   {  
     progress_bar_ = 1;
@@ -253,7 +264,7 @@ void funcParsing(char c)
   rx_func_start_ = false; 
 } 
 
-void setBLDCMotor(bool mode) 
+void setBLDCMotorManual() 
 {   
   double pwr_value, sin_angle, alpha; 
   double vel_l, vel_r; 
@@ -314,39 +325,37 @@ void setBLDCMotor(bool mode)
   changeFilterSz(pwr_value);  
  
   // set bldc value
-  if(mode)
-  {
-    vel_l = motor_vel_.linear.x;
-    vel_r = motor_vel_.linear.y;
-    
-    bldc1_val_ = ctr_val_ + (cur_max_val_ * (vel_l/1.0)); //max: 1.0[m/s]
-    bldc2_val_ = ctr_val_ + (cur_max_val_ * (vel_r/1.0)); 
-    bldc3_val_ = ctr_val_ + (cur_max_val_ * (vel_r/1.0)); 
-    bldc4_val_ = ctr_val_ + (cur_max_val_ * (vel_l/1.0)); 
-  }
-  else
-  {
-    bldc1_val_ = ctr_val_ + (cur_max_val_ * (vel_l/100.0)); 
-    bldc2_val_ = ctr_val_ + (cur_max_val_ * (vel_r/100.0)); 
-    bldc3_val_ = ctr_val_ + (cur_max_val_ * (vel_r/100.0)); 
-    bldc4_val_ = ctr_val_ + (cur_max_val_ * (vel_l/100.0)); 
-  }
-  
-  //Serial.print("L: "); Serial.println(BLDCVal1); 
-  //Serial.print("R: "); Serial.println(BLDCVal2); 
+  bldc1_val_ = ctr_val_ + (cur_max_val_ * (vel_l/100.0)); 
+  bldc2_val_ = ctr_val_ + (cur_max_val_ * (vel_r/100.0)); 
+  bldc3_val_ = ctr_val_ + (cur_max_val_ * (vel_r/100.0)); 
+  bldc4_val_ = ctr_val_ + (cur_max_val_ * (vel_l/100.0));  
 
   pre_vel_l_ = vel_l;
   pre_vel_r_ = vel_r;
   pre_speed_ = cur_speed_;  
   pre_filter_sz_ = cur_filter_sz_;
+  
+  //Serial.print("L: "); Serial.println(bldc1_val_); 
+  //Serial.print("R: "); Serial.println(bldc2_val_); 
 } 
+
+void setBLDCMotorAuto()
+{
+  bldc1_val_ = ctr_val_ + (cur_max_val_ * (auto_left_vel_/1.0)); //max: 1.0[m/s]
+  bldc2_val_ = ctr_val_ + (cur_max_val_ * (auto_right_vel_/1.0)); 
+  bldc3_val_ = ctr_val_ + (cur_max_val_ * (auto_right_vel_/1.0)); 
+  bldc4_val_ = ctr_val_ + (cur_max_val_ * (auto_left_vel_/1.0)); 
+
+  //Serial.print("L2: "); Serial.println(bldc1_val_); 
+  //Serial.print("R2: "); Serial.println(bldc2_val_); 
+}
 
 void writeBLDCMotor(bool mode) 
 {   
   if(mode)
   {
     double bldc_val = 0;
-    memset(pwr_array_, bldc_val, sizeof(pwr_array_));
+    memset(pwr_array_, 0, sizeof(pwr_array_));
     vesc1_.write(bldc_val); 
     vesc1_.write(bldc_val); 
     vesc1_.write(bldc_val); 
@@ -388,7 +397,8 @@ void writeDCMotor()
       analogWrite(DC2_B_PIN, 0); 
     break;    
   }   
-  //Serial.print("Vel: "); Serial.println(vel); 
+  
+  Serial.print("Vel: "); Serial.println(vel); 
 } 
 
 double veloFilter()
