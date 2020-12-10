@@ -80,18 +80,18 @@ void changeFilterSz(double pwr_value);
 double veloFilter();
 
 ros::NodeHandle nh_;
-ros::Subscriber<geometry_msgs::Twist> vel_sub_("argos_mr/motor_vel", veloCallback);
+ros::Subscriber<geometry_msgs::Twist> motor_vel_sub_("argos_mr/motor_vel", veloCallback);
 
 geometry_msgs::Twist motor_vel_;
-ros::Publisher vel_check_("check/vel", &motor_vel_);
+ros::Publisher check_vel_pub_("argos_mr/check_vel", &motor_vel_);
 
 void setup() 
 {
   //ROS INIT
   nh_.getHardware()->setBaud(ROS_BAUD);
   nh_.initNode();
-  nh_.subscribe(vel_sub_);
-  nh_.advertise(vel_check_);
+  nh_.subscribe(motor_vel_sub_);
+  nh_.advertise(check_vel_pub_);
 
   //Serial 
   //Serial.begin(SERIAL_MONITOR); 
@@ -142,6 +142,8 @@ void loop()
         else
           setBLDCMotorManual(); 
 
+        publishCheckValue();
+        
         writeBLDCMotor(emergency_mode_); 
 
         writeDCMotor(); 
@@ -334,7 +336,7 @@ void setBLDCMotorManual()
   pre_vel_l_ = vel_l;
   pre_vel_r_ = vel_r;
   pre_speed_ = cur_speed_;  
-  pre_filter_sz_ = cur_filter_sz_;
+  pre_filter_sz_ = cur_filter_sz_;  
   
   //Serial.print("L: "); Serial.println(bldc1_val_); 
   //Serial.print("R: "); Serial.println(bldc2_val_); 
@@ -346,16 +348,19 @@ void setBLDCMotorAuto()
   bldc2_val_ = ctr_val_ + (cur_max_val_ * (auto_right_vel_/1.0)); 
   bldc3_val_ = ctr_val_ + (cur_max_val_ * (auto_right_vel_/1.0)); 
   bldc4_val_ = ctr_val_ + (cur_max_val_ * (auto_left_vel_/1.0)); 
-
-  motor_vel_.linear.x = bldc1_val_;
-  motor_vel_.linear.y = bldc2_val_;
-  
-  vel_check_.publish(&motor_vel_);
   
   //Serial.print("L2: "); Serial.println(bldc1_val_); 
   //Serial.print("R2: "); Serial.println(bldc2_val_); 
 }
 
+void publishCheckValue()
+{
+  motor_vel_.linear.x = bldc1_val_;
+  motor_vel_.linear.y = bldc2_val_;
+    
+  check_vel_pub_.publish(&motor_vel_);
+}
+  
 void writeBLDCMotor(bool mode) 
 {   
   if(mode == true)
