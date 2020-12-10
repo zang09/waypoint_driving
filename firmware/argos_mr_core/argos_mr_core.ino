@@ -257,11 +257,14 @@ void funcParsing(char c)
     pre_max_val_    = cur_max_val_; 
     emergency_mode_ = true;
   } 
-  else if (c == 'g')  
+  else if (c == 'g') // send state to phone
   { 
-    String s_value(progress_bar_);
-    char value = s_value.charAt(0);
+    String p_value(progress_bar_);    
+    char value = p_value.charAt(0);
     Serial2.write(value);
+
+    if(auto_mode_) Serial2.write('a');
+    else           Serial2.write('m');
   } 
   
   rx_func_start_ = false; 
