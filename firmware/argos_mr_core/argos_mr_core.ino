@@ -94,7 +94,7 @@ void setup()
   nh_.advertise(vel_check_);
 
   //Serial 
-  Serial.begin(SERIAL_MONITOR); 
+  //Serial.begin(SERIAL_MONITOR); 
   Serial2.begin(BLUTETOOTH); 
 
   //Servo 
@@ -116,7 +116,7 @@ void setup()
   cur_max_val_   = (progress_bar_+1)*10; 
   cur_filter_sz_ = 10; 
   
-  delay(2500); 
+  delay(50); 
 }
 
 void loop() 
@@ -137,7 +137,10 @@ void loop()
         rx_data_start_ = false; 
         rx_string_ = ""; 
 
-        setBLDCMotorManual(); 
+        if(auto_mode_)
+          setBLDCMotorAuto();
+        else
+          setBLDCMotorManual(); 
 
         writeBLDCMotor(emergency_mode_); 
 
@@ -158,19 +161,8 @@ void loop()
     { 
       funcParsing(c); 
     } 
-  } 
+  }
 
-  if(auto_mode_) 
-  {
-    setBLDCMotorAuto();
-
-    writeBLDCMotor(emergency_mode_); 
-
-    writeDCMotor(); 
-
-    delay(10); // test
-  } 
-  
   nh_.spinOnce(); //ROS callback
 }
 
@@ -240,14 +232,14 @@ void funcParsing(char c)
   else if (c == 'l')  
   {     
     pre_max_val_      = cur_max_val_; 
-    cur_max_val_      = 15;  //static
+    cur_max_val_      = 12;  //static
     bldc_motor_state_ = LEFT; 
     bldc_turn_mode_   = true; 
   } 
   else if (c == 'r')  
   { 
     pre_max_val_      = cur_max_val_; 
-    cur_max_val_      = 15;  //static
+    cur_max_val_      = 12;  //static
     bldc_motor_state_ = RIGHT; 
     bldc_turn_mode_   = true; 
   } 
@@ -344,8 +336,8 @@ void setBLDCMotorManual()
   pre_speed_ = cur_speed_;  
   pre_filter_sz_ = cur_filter_sz_;
   
-  Serial.print("L: "); Serial.println(bldc1_val_); 
-  Serial.print("R: "); Serial.println(bldc2_val_); 
+  //Serial.print("L: "); Serial.println(bldc1_val_); 
+  //Serial.print("R: "); Serial.println(bldc2_val_); 
 } 
 
 void setBLDCMotorAuto()
@@ -355,6 +347,11 @@ void setBLDCMotorAuto()
   bldc3_val_ = ctr_val_ + (cur_max_val_ * (auto_right_vel_/1.0)); 
   bldc4_val_ = ctr_val_ + (cur_max_val_ * (auto_left_vel_/1.0)); 
 
+  motor_vel_.linear.x = bldc1_val_;
+  motor_vel_.linear.y = bldc2_val_;
+  
+  vel_check_.publish(&motor_vel_);
+  
   //Serial.print("L2: "); Serial.println(bldc1_val_); 
   //Serial.print("R2: "); Serial.println(bldc2_val_); 
 }
