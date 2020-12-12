@@ -30,11 +30,13 @@ void WaypointDriving::initParams()
 
 void WaypointDriving::subscribeAndPublish()
 {
-    sub_waypoint_flag_  = nh_.subscribe<rviz_flag_plugin::PointArray>("flag/points", 10, &WaypointDriving::waypointFlagHandler, this);
-    sub_current_odom_   = nh_.subscribe<nav_msgs::Odometry>("odom", 100, &WaypointDriving::odomHandler, this);
-    pub_motor_vel_      = nh_.advertise<geometry_msgs::Twist>("argos_mr/motor_vel", 10);
-    pub_line_strip_     = nh_.advertise<visualization_msgs::Marker>("flag/line", 1);
-    pub_virtual_point_  = nh_.advertise<visualization_msgs::Marker>("virtual/point", 1);
+    sub_waypoint_flag_   = nh_.subscribe<rviz_flag_plugin::PointArray>("flag/points", 10, &WaypointDriving::waypointFlagHandler, this);
+    sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>("odom", 100, &WaypointDriving::odomHandler, this);
+
+    pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("argos_mr/motor_vel", 10);
+    pub_line_strip_      = nh_.advertise<visualization_msgs::Marker>("flag/line", 1);
+    pub_virtual_point_   = nh_.advertise<visualization_msgs::Marker>("virtual/point", 1);
+    pub_reference_angle_ = nh_.advertise<nav_msgs::Odometry>("reference/angle", 1);
 }
 
 void WaypointDriving::waypointFlagHandler(const rviz_flag_plugin::PointArrayConstPtr &point_msg)
@@ -68,6 +70,7 @@ void WaypointDriving::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
         if(line_num_ >= (int)line_info_.size()) return;
 
         visualizationVirtualPoint();
+        visualizationReferenceAngle();
     }
     else
     {
@@ -75,8 +78,7 @@ void WaypointDriving::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
         vel.linear.y = 0.0;
     }
 
-    if(velocity_filter_)
-        velocityFilter(vel);
+    if(velocity_filter_) velocityFilter(vel);
 
     pub_motor_vel_.publish(vel);
 }
@@ -137,8 +139,8 @@ void WaypointDriving::calculateTargetVel(double &left_vel, double &right_vel)
                                                      current_pose_.position);
 
     double virtual_angle = atan2(projection_value, virtual_point_dist_);
-    double reference_angle = line_info_.at(line_num_).angle_rad - virtual_angle;
-    double delta_angle = current_yaw_ - reference_angle;
+    reference_angle_ = line_info_.at(line_num_).angle_rad - virtual_angle;
+    double delta_angle = current_yaw_ - reference_angle_;
 
     if(delta_angle < -PI) delta_angle += 2*PI;
     else if(delta_angle > PI) delta_angle -= 2*PI;
@@ -182,17 +184,36 @@ void WaypointDriving::visualizationVirtualPoint()
     pub_virtual_point_.publish(points);
 }
 
+void WaypointDriving::visualizationReferenceAngle()
+{
+    nav_msgs::Odometry odom;
+    odom.header.frame_id = "map";
+    odom.header.stamp = ros::Time::now();
+
+    tf::Quaternion quat;
+    geometry_msgs::Quaternion quat_msg;
+    quat.setRPY(0, 0, reference_angle_);
+    tf::quaternionTFToMsg(quat, quat_msg);
+
+    odom.pose.pose.position = current_pose_.position;
+    odom.pose.pose.orientation = quat_msg;
+
+    pub_reference_angle_.publish(odom);
+}
+
 double WaypointDriving::projectionLengthToLine(Point s_p, Point e_p, Point c_p)
 {
     double angle  = atan2(e_p.y-s_p.y, e_p.x-s_p.x);
     double value = -(c_p.x-s_p.x)*sin(angle) + (c_p.y-s_p.y)*cos(angle);
 
-    //    double delta_x = e_p.x - s_p.x;
-    //    double delta_y = e_p.y - s_p.y;
-    //    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
-    //    double sin_theta = delta_y / delat_l;
-    //    double cos_theta = delta_x / delat_l;
-    //    double result = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
+    /*
+    double delta_x = e_p.x - s_p.x;
+    double delta_y = e_p.y - s_p.y;
+    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
+    double sin_theta = delta_y / delat_l;
+    double cos_theta = delta_x / delat_l;
+    double value = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
+    */
 
     return value;
 }

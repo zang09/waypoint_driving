@@ -35,6 +35,7 @@ public:
     void visualizationSegmentedLine();
     void calculateTargetVel(double &left_vel, double &right_vel);
     void visualizationVirtualPoint();
+    void visualizationReferenceAngle();
     double projectionLengthToLine(geometry_msgs::Point s_p, geometry_msgs::Point e_p, geometry_msgs::Point c_p);
     geometry_msgs::Point projectionPointToLine(geometry_msgs::Point s_p, geometry_msgs::Point e_p, geometry_msgs::Point c_p);
     double getYawFromQuaternion(geometry_msgs::Quaternion q_msg);
@@ -49,8 +50,10 @@ private:
     ros::Publisher  pub_motor_vel_;
     ros::Publisher  pub_line_strip_;
     ros::Publisher  pub_virtual_point_;
+    ros::Publisher  pub_reference_angle_;
 
     // Variable
+    double reference_angle_;
     double current_yaw_;
     geometry_msgs::Pose  current_pose_;
 
