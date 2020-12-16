@@ -1,7 +1,10 @@
 waypoint_driving:
 
   velocity_filter: true
+  max_filter_size: 50
   filter_size: 20
+  robot_width: 1                # [m]
+  
   beta: 0.3                     # chose 0.1~0.9 begger, turn faster
   mean_velocity: 1.2            # straight speed [m/s]
   turn_radius: 1.5              # 0.5 [m]
