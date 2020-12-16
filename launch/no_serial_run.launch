@@ -7,6 +7,8 @@
   <rosparam file="$(find waypoint_driving)/config/params.yaml" command="load" /> 
   
   <!--- Start Node -->
-  <node pkg="$(arg project)" type="$(arg project)" name="$(arg project)" output="screen" respawn="false" />  
+  <node pkg="$(arg project)" type="driving_node" name="driving_node" output="screen" respawn="false"/>
+  
+  <node pkg="$(arg project)" type="cloud_segment" name="cloud_segment" output="screen" respawn="false"/>
   
 </launch>

@@ -14,7 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   rviz_flag_plugin
 )
 
-## System dependencies are found with CMake's conventions
+find_package(PCL REQUIRED QUIET)
+find_package(OpenCV REQUIRED QUIET)
 # find_package(Boost REQUIRED COMPONENTS system)
 
 ################################################
@@ -61,18 +62,20 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES waypoint_driving
   CATKIN_DEPENDS roscpp std_msgs sensor_msgs
-  DEPENDS system_lib
+  DEPENDS PCL
 )
 
 ###########
 ## Build ##
 ###########
 
-include_directories(include ${catkin_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
-add_executable(${PROJECT_NAME} src/waypoint_driving.cpp src/main.cpp)
+add_executable(driving_node src/driving_node.cpp)
+target_link_libraries(driving_node ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+add_executable(cloud_segment src/cloud_segment.cpp)
+target_link_libraries(cloud_segment ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##
