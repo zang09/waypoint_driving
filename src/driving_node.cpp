@@ -55,18 +55,18 @@ void DrivingNode::resetParams()
 
 void DrivingNode::subscribeAndPublish()
 {
-  sub_waypoint_flag_   = nh_.subscribe<rviz_flag_plugin::PointArray>("flag/points", 10, &DrivingNode::waypointFlagHandler, this);
-  sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>("odom", 100, &DrivingNode::odomHandler, this);
-  sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>("segmented_cloud_pure", 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
+  sub_waypoint_flag_   = nh_.subscribe<rviz_flag_plugin::PointArray>("rviz/flag_points", 10, &DrivingNode::waypointFlagHandler, this);
+  sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>("hdl_localization/odom", 100, &DrivingNode::odomHandler, this);
+  sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>("waypoint_driving/segmented_cloud_pure", 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
 
-  pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("argos_mr/motor_vel", 10);
-  pub_line_strip_      = nh_.advertise<visualization_msgs::Marker>("flag/line", 1);
-  pub_virtual_point_   = nh_.advertise<visualization_msgs::Marker>("virtual/point", 1);
-  pub_object_point_    = nh_.advertise<visualization_msgs::Marker>("object/centroid_point", 1);
-  pub_reference_angle_ = nh_.advertise<nav_msgs::Odometry>("reference/angle", 1);
+  pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("waypoint_driving/motor_vel", 10);
+  pub_line_strip_      = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/flag_line", 1);
+  pub_virtual_point_   = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/robot/virtual_point", 1);
+  pub_object_point_    = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/object/centroid_point", 1);
+  pub_reference_angle_ = nh_.advertise<nav_msgs::Odometry>("waypoint_driving/reference_angle", 1);
 
-  pub_roi_cloud_       = nh_.advertise<sensor_msgs::PointCloud2>("roi_cloud", 1);
-  pub_clustered_cloud_ = nh_.advertise<sensor_msgs::PointCloud2>("clustered_cloud", 1);
+  pub_roi_cloud_       = nh_.advertise<sensor_msgs::PointCloud2>("waypoint_driving/roi_cloud", 1);
+  pub_clustered_cloud_ = nh_.advertise<sensor_msgs::PointCloud2>("waypoint_driving/clustered_cloud", 1);
 }
 
 void DrivingNode::waypointFlagHandler(const rviz_flag_plugin::PointArrayConstPtr &point_msg)

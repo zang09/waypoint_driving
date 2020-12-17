@@ -47,18 +47,17 @@ private:
   uint16_t *queueIndY;
 
 public:
-  CloudSegment():
-    nh("~"){
-
+  CloudSegment()
+  {
     subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 1, &CloudSegment::cloudHandler, this);
 
-    pubFullCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_projected", 1);
-    pubFullInfoCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_info", 1);
+    pubFullCloud = nh.advertise<sensor_msgs::PointCloud2> ("waypoint_driving/full_cloud_projected", 1);
+    pubFullInfoCloud = nh.advertise<sensor_msgs::PointCloud2> ("waypoint_driving/full_cloud_info", 1);
 
-    pubGroundCloud = nh.advertise<sensor_msgs::PointCloud2> ("/ground_cloud", 1);
-    pubSegmentedCloud = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud", 1);
-    pubSegmentedCloudPure = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud_pure", 1);
-    pubOutlierCloud = nh.advertise<sensor_msgs::PointCloud2> ("/outlier_cloud", 1);
+    pubGroundCloud = nh.advertise<sensor_msgs::PointCloud2> ("waypoint_driving/ground_cloud", 1);
+    pubSegmentedCloud = nh.advertise<sensor_msgs::PointCloud2> ("waypoint_driving/segmented_cloud", 1);
+    pubSegmentedCloudPure = nh.advertise<sensor_msgs::PointCloud2> ("waypoint_driving/segmented_cloud_pure", 1);
+    pubOutlierCloud = nh.advertise<sensor_msgs::PointCloud2> ("waypoint_driving/outlier_cloud", 1);
 
     nanPoint.x = std::numeric_limits<float>::quiet_NaN();
     nanPoint.y = std::numeric_limits<float>::quiet_NaN();

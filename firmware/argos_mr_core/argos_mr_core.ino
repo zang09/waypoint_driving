@@ -80,10 +80,10 @@ void changeFilterSz(double pwr_value);
 double veloFilter();
 
 ros::NodeHandle nh_;
-ros::Subscriber<geometry_msgs::Twist> motor_vel_sub_("argos_mr/motor_vel", veloCallback);
+ros::Subscriber<geometry_msgs::Twist> motor_vel_sub_("waypoint_driving/motor_vel", veloCallback);
 
 geometry_msgs::Twist motor_vel_;
-ros::Publisher check_vel_pub_("argos_mr/check_vel", &motor_vel_);
+ros::Publisher check_vel_pub_("waypoint_driving/check_vel", &motor_vel_);
 
 void setup() 
 {
