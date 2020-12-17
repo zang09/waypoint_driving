@@ -315,7 +315,8 @@ void DrivingNode::perceptionObstacle()
   //0 -> stop
   //1 -> very slow
   //2 -> slow
-  //3 -> nothing
+  //3 -> normal
+  //4 -> nothing
   std::vector<std::pair<int, int>> index;
 
   for(int i=0; i<centroid_info_.size(); i++)
@@ -324,19 +325,21 @@ void DrivingNode::perceptionObstacle()
     double y = centroid_info_[i].y;
     double dist = sqrt(x*x + y*y) - robot_width_/2.f;
 
-    if(abs(y) < (robot_width_/2.f + 1.f)) /*straight case*/
+    if(abs(y) < (robot_width_/2.f + 0.3)) /*straight case*/
     {
-      if(x<3)      index.push_back(std::make_pair(0, i));
-      else if(x<5) index.push_back(std::make_pair(1, i));
-      else if(x<7) index.push_back(std::make_pair(2, i));
-      else         index.push_back(std::make_pair(3, i));
+      if(x<1.0)      index.push_back(std::make_pair(0, i));
+      else if(x<2.0) index.push_back(std::make_pair(1, i));
+      else if(x<3.0) index.push_back(std::make_pair(2, i));
+      else if(x<4.0) index.push_back(std::make_pair(3, i));
+      else           index.push_back(std::make_pair(4, i));
     }
     else /*round case*/
     {
-      if(dist<1)      index.push_back(std::make_pair(0, i));
-      else if(dist<2) index.push_back(std::make_pair(1, i));
-      else if(dist<3) index.push_back(std::make_pair(2, i));
-      else            index.push_back(std::make_pair(3, i));
+      if(dist<0.5)      index.push_back(std::make_pair(0, i));
+      else if(dist<1.0) index.push_back(std::make_pair(1, i));
+      else if(dist<1.5) index.push_back(std::make_pair(2, i));
+      else if(dist<2.0) index.push_back(std::make_pair(3, i));
+      else              index.push_back(std::make_pair(4, i));
     }
   }
 
@@ -345,21 +348,27 @@ void DrivingNode::perceptionObstacle()
   //change velocity
   int score, idx;
 
-  if(index.empty()) {
-    score = 3;
+  if(index.empty())
+  {
+    score = -1;
   }
-  else {
+  else
+  {
     score = index[0].first;
     idx = index[0].second;
 
-    geometry_msgs::Point p;
-    p.x = centroid_info_[idx].x;
-    p.y = centroid_info_[idx].y;
-    p.z = centroid_info_[idx].z;
-    obstacle_points_.points.push_back(p);
+    if(score < 4)
+    {
+      geometry_msgs::Point p;
+      p.x = centroid_info_[idx].x;
+      p.y = centroid_info_[idx].y;
+      p.z = centroid_info_[idx].z;
+      obstacle_points_.points.push_back(p);
+    }
   }
 
-  switch(score) {
+  switch(score)
+  {
   case 0:
     coeff_velocity_ = 0;
     filter_size_ = 5;
@@ -373,6 +382,11 @@ void DrivingNode::perceptionObstacle()
     break;
 
   case 2:
+    coeff_velocity_ = 0.6;
+    filter_size_ = 10;
+    break;
+
+  case 3:
     coeff_velocity_ = 0.8;
     filter_size_ = 10;
     break;
@@ -383,13 +397,14 @@ void DrivingNode::perceptionObstacle()
     break;
   }
 
-  if(wait_flag_) {
+  if(wait_flag_)
+  {
     wait_cnt_++;
     coeff_velocity_ = 0;
     filter_size_ = 5;
   }
 
-  if(wait_cnt_ > 20) //2s
+  if(wait_cnt_ > 10) //1s
   {
     fill(left_velocity_.begin(), left_velocity_.end(), 0);
     fill(right_velocity_.begin(), right_velocity_.end(), 0);
