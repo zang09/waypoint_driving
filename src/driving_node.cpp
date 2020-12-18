@@ -122,8 +122,8 @@ void DrivingNode::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
 
   if(velocity_filter_) velocityFilter(vel);
 
-  std::cout << "velocity l: " << vel.linear.x << std::endl;
-  std::cout << "velocity r: " << vel.linear.y << std::endl << std::endl;
+  //std::cout << "velocity l: " << vel.linear.x << std::endl;
+  //std::cout << "velocity r: " << vel.linear.y << std::endl << std::endl;
   pub_motor_vel_.publish(vel);
 }
 
@@ -362,7 +362,7 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
 
 void DrivingNode::perceptionObstacle()
 {
-  std::vector<std::pair<int, int>> index;
+  std::vector<std::pair<double, int>> index;
 
   //scoring obstacle
   for(int i=0; i<centroid_info_.size(); i++)
@@ -372,7 +372,7 @@ void DrivingNode::perceptionObstacle()
     double dist = sqrt(x*x + y*y);
     double score;
 
-    if( abs(y) < (robot_width_/2+surplus_range_) ) /*straight case*/
+    if( abs(y) < (robot_width_/2.f + surplus_range_) ) /*straight case*/
     {
       if(dist < stop_detect_range_) {
         score = 0;
@@ -380,6 +380,8 @@ void DrivingNode::perceptionObstacle()
 
         wait_cnt_  = 0;
         wait_flag_ = true;
+
+        ROS_INFO("Distance: %lf, Y: %lf", dist, y);
       }
       else if(dist < max_detect_range_) {
         score = 1-1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
