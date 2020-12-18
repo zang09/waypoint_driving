@@ -2,8 +2,15 @@ waypoint_driving:
 
   velocity_filter: true
   max_filter_size: 50
-  filter_size: 20
-  robot_width: 0.5                # [m]
+  filter_size: 15
+  
+  robot_width: 0.7              # [m]  
+  parabola_axis: 1.5            # [m]
+  parabola_p: 30
+  stop_range: 2.0               # [m]
+  alpha_range: 0.8              # [m]
+  alpha_detect_range: 1.5       # [m]
+  max_detect_range: 8.0         # [m]
   
   beta: 0.3                     # chose 0.1~0.9 begger, turn faster
   mean_velocity: 1.2            # straight speed [m/s]

@@ -56,7 +56,8 @@ public:
   void waypointFlagHandler(const rviz_flag_plugin::PointArrayConstPtr &point_msg);
   void odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg);
   void cloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg);
-  void limitCloudDegree(float start_deg, float end_deg, pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
+  void segmentCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg);
+  void limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
   void smoothingCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
   void euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
   void perceptionObstacle();
@@ -78,6 +79,7 @@ private:
   ros::Subscriber sub_waypoint_flag_;
   ros::Subscriber sub_current_odom_;
   ros::Subscriber sub_point_cloud_;
+  ros::Subscriber sub_segmented_cloud_;
   ros::Publisher  pub_motor_vel_;
   ros::Publisher  pub_line_strip_;
   ros::Publisher  pub_virtual_point_;
@@ -98,7 +100,9 @@ private:
   visualization_msgs::Marker obstacle_points_;
 
   pcl::PointCloud<PointType>::Ptr cloud_in_;
+  pcl::PointCloud<PointType>::Ptr seg_cloud_in_;
   pcl::PointCloud<PointType>::Ptr roi_cloud_;
+  pcl::PointCloud<PointType>::Ptr seg_roi_cloud_;
   pcl::PointCloud<PointType>::Ptr smoothing_cloud_;
   pcl::PointCloud<PointType>::Ptr clustered_cloud_;
   std::vector<pcl::PointXYZ> centroid_info_;
@@ -114,6 +118,11 @@ private:
   int max_filter_size_;
   bool velocity_filter_;
   float robot_width_;
+  float parabola_axis_;
+  int   parabola_p_;
+  float surplus_range_;
+  float stop_detect_range_;
+  float max_detect_range_;
 
   // Control Param
   float  beta_;               // chose 0.1~0.9 begger, turn faster

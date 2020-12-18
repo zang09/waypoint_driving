@@ -20,7 +20,13 @@ void DrivingNode::initParams()
   nh_.param<bool>("/waypoint_driving/velocity_filter", velocity_filter_, true);
   nh_.param<int>("/waypoint_driving/filter_size", filter_size_, 20);
   nh_.param<int>("/waypoint_driving/max_filter_size", max_filter_size_, 50);
+
   nh_.param<float>("/waypoint_driving/robot_width", robot_width_, 1.0);
+  nh_.param<float>("/waypoint_driving/parabola_axis", parabola_axis_, 1.5);
+  nh_.param<int>("/waypoint_driving/parabola_p", parabola_p_, 30);
+  nh_.param<float>("/waypoint_driving/surplus_range", surplus_range_, 0.8);
+  nh_.param<float>("/waypoint_driving/stop_detect_range", stop_detect_range_, 2.0);
+  nh_.param<float>("/waypoint_driving/max_detect_range", max_detect_range_, 8.0);
 
   nh_.param<float>("/waypoint_driving/beta", beta_, 0.5);
   nh_.param<float>("/waypoint_driving/mean_velocity", mean_vel_, 1.0);
@@ -38,14 +44,16 @@ void DrivingNode::allocateMemory()
 {
   cloud_in_.reset(new pcl::PointCloud<PointType>());
   roi_cloud_.reset(new pcl::PointCloud<PointType>());
+  seg_cloud_in_.reset(new pcl::PointCloud<PointType>());
+  seg_roi_cloud_.reset(new pcl::PointCloud<PointType>());
   smoothing_cloud_.reset(new pcl::PointCloud<PointType>());
   clustered_cloud_.reset(new pcl::PointCloud<PointType>());
 }
 
 void DrivingNode::resetParams()
 {
-  cloud_in_->clear();
-  roi_cloud_->clear();
+  seg_cloud_in_->clear();
+  seg_roi_cloud_->clear();
   smoothing_cloud_->clear();
   clustered_cloud_->clear();
 
@@ -57,7 +65,8 @@ void DrivingNode::subscribeAndPublish()
 {
   sub_waypoint_flag_   = nh_.subscribe<rviz_flag_plugin::PointArray>("rviz/flag_points", 10, &DrivingNode::waypointFlagHandler, this);
   sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>("hdl_localization/odom", 100, &DrivingNode::odomHandler, this);
-  sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>("waypoint_driving/segmented_cloud_pure", 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
+  sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>("velodyne_points", 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
+  sub_segmented_cloud_ = nh_.subscribe<sensor_msgs::PointCloud2>("waypoint_driving/segmented_cloud_pure", 1, &DrivingNode::segmentCloudHandler, this, ros::TransportHints().tcpNoDelay());
 
   pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("waypoint_driving/motor_vel", 10);
   pub_line_strip_      = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/flag_line", 1);
@@ -118,16 +127,16 @@ void DrivingNode::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
   pub_motor_vel_.publish(vel);
 }
 
-void DrivingNode::cloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg)
+void DrivingNode::segmentCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg)
 {  
   cloud_header_ = cloud_msg->header;
-  pcl::fromROSMsg(*cloud_msg, *cloud_in_);
+  pcl::fromROSMsg(*cloud_msg, *seg_cloud_in_);
 
-  limitCloudDegree(45.0, 135.0, *cloud_in_, roi_cloud_);
+  limitCloudView(*seg_cloud_in_, seg_roi_cloud_);
 
-  //smoothingCloud(*roi_cloud_, smoothing_cloud_);
+  //smoothingCloud(*seg_roi_cloud_, smoothing_cloud_);
 
-  euclideanClusteredCloud(*roi_cloud_, clustered_cloud_);
+  euclideanClusteredCloud(*seg_roi_cloud_, clustered_cloud_);
 
   perceptionObstacle();
 
@@ -146,12 +155,56 @@ void DrivingNode::cloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_m
   resetParams();
 }
 
-void DrivingNode::limitCloudDegree(float start_deg, float end_deg, pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out)
+void DrivingNode::cloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg)
 {
-  float x,y,theta;
-  pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-  pcl::ExtractIndices<PointType> extract;
+  cloud_header_ = cloud_msg->header;
+  pcl::fromROSMsg(*cloud_msg, *cloud_in_);
 
+  limitCloudView(*cloud_in_, roi_cloud_);
+
+  if (pub_roi_cloud_.getNumSubscribers() != 0)
+  {
+    sensor_msgs::PointCloud2 temp_cloud;
+    pcl::toROSMsg(*roi_cloud_, temp_cloud);
+    temp_cloud.header.stamp = cloud_header_.stamp;
+    temp_cloud.header.frame_id = "base_link";
+
+    pub_roi_cloud_.publish(temp_cloud);
+  }
+
+  cloud_in_->clear();
+  roi_cloud_->clear();
+}
+
+void DrivingNode::limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out)
+{
+  if(cloud_in.empty())
+    return;
+
+  float x,y;
+  pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+  pcl::ExtractIndices<PointType> extract;  
+
+  for (size_t i=0; i<cloud_in.points.size(); i++)
+  {
+    //change axis
+    x = cloud_in.points[i].y;
+    y = cloud_in.points[i].x;
+
+    if ( y>0 &&
+         (y*y)-(4*parabola_p_*(x-(robot_width_/2+parabola_axis_)))>0 &&
+         (y*y)+(4*parabola_p_*(x+(robot_width_/2+parabola_axis_)))>0 )
+    {
+      inliers->indices.push_back(i);
+    }
+  }
+
+  extract.setInputCloud(cloud_in.makeShared());
+  extract.setIndices(inliers);
+  extract.setNegative(false);
+  extract.filter(*cloud_out);
+
+  /*
   for (size_t i=0; i<cloud_in.points.size(); i++)
   {
     //cloud_in.points[i].y -= 1.5;
@@ -172,17 +225,15 @@ void DrivingNode::limitCloudDegree(float start_deg, float end_deg, pcl::PointClo
       inliers->indices.push_back(i);
     }
   }
+  */
 
-  extract.setInputCloud(cloud_in.makeShared());
-  extract.setIndices(inliers);
-  extract.setNegative(false);
-  extract.filter(*cloud_out);
-
-  //  pcl::PassThrough<PointType> pass_y;
-  //  pass_y.setInputCloud(cloud_out);
-  //  pass_y.setFilterFieldName("y");
-  //  pass_y.setFilterLimits(0-3.0, 0+3.0);
-  //  pass_y.filter(*cloud_out);
+  /*
+  pcl::PassThrough<PointType> pass_y;
+  pass_y.setInputCloud(cloud_out);
+  pass_y.setFilterFieldName("y");
+  pass_y.setFilterLimits(0-3.0, 0+3.0);
+  pass_y.filter(*cloud_out);
+  */
 }
 
 void DrivingNode::smoothingCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out)
@@ -311,91 +362,80 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
 
 void DrivingNode::perceptionObstacle()
 {
-  //scoring obstacle
-  //0 -> stop
-  //1 -> very slow
-  //2 -> slow
-  //3 -> nothing
-  std::vector<std::pair<int, int>> index;
+  std::vector<std::pair<double, int>> index;
 
+  //scoring obstacle
   for(int i=0; i<centroid_info_.size(); i++)
   {
     double x = centroid_info_[i].x;
     double y = centroid_info_[i].y;
-    double dist = sqrt(x*x + y*y) - robot_width_/2.f;
+    double dist = sqrt(x*x + y*y);
+    double score;
 
-    if(abs(y) < (robot_width_/2.f + 1.f)) /*straight case*/
+    if( abs(y) < (robot_width_/2+surplus_range_) ) /*straight case*/
     {
-      if(x<3)      index.push_back(std::make_pair(0, i));
-      else if(x<5) index.push_back(std::make_pair(1, i));
-      else if(x<7) index.push_back(std::make_pair(2, i));
-      else         index.push_back(std::make_pair(3, i));
+      if(dist < stop_detect_range_) {
+        score = 0;
+        index.push_back(std::make_pair(score, i));
+
+        wait_cnt_  = 0;
+        wait_flag_ = true;
+      }
+      else if(dist < max_detect_range_) {
+        score = 1-1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
+        index.push_back(std::make_pair(score, i));
+      }
     }
     else /*round case*/
     {
-      if(dist<1)      index.push_back(std::make_pair(0, i));
-      else if(dist<2) index.push_back(std::make_pair(1, i));
-      else if(dist<3) index.push_back(std::make_pair(2, i));
-      else            index.push_back(std::make_pair(3, i));
+      float min_vel = 0.2;
+
+      if(dist < max_detect_range_) {
+        score = ((1-min_vel)/(max_detect_range_)*dist) + min_vel;
+        index.push_back(std::make_pair(score, i));
+      }
     }
   }
 
-  std::sort(index.begin(), index.end());
-
-  //change velocity
-  int score, idx;
-
   if(index.empty()) {
-    score = 3;
+    coeff_velocity_ = 1.0;
   }
   else {
-    score = index[0].first;
-    idx = index[0].second;
+    std::sort(index.begin(), index.end());
 
     geometry_msgs::Point p;
-    p.x = centroid_info_[idx].x;
-    p.y = centroid_info_[idx].y;
-    p.z = centroid_info_[idx].z;
+    p.x = centroid_info_[index[0].second].x;
+    p.y = centroid_info_[index[0].second].y;
+    p.z = centroid_info_[index[0].second].z;
     obstacle_points_.points.push_back(p);
+
+    coeff_velocity_ = index[0].first;
   }
 
-  switch(score) {
-  case 0:
-    coeff_velocity_ = 0;
-    filter_size_ = 5;
-    wait_flag_ = true;
-    wait_cnt_  = 0;
-    break;
-
-  case 1:
-    coeff_velocity_ = 0.4;
-    filter_size_ = 10;
-    break;
-
-  case 2:
-    coeff_velocity_ = 0.8;
-    filter_size_ = 10;
-    break;
-
-  default:
-    coeff_velocity_ = 1.0;
-    filter_size_ = 20;
-    break;
-  }
-
-  if(wait_flag_) {
-    wait_cnt_++;
-    coeff_velocity_ = 0;
-    filter_size_ = 5;
-  }
-
-  if(wait_cnt_ > 20) //2s
+  if(wait_flag_)
   {
-    fill(left_velocity_.begin(), left_velocity_.end(), 0);
-    fill(right_velocity_.begin(), right_velocity_.end(), 0);
-    wait_flag_ = false;
-    wait_cnt_  = 0;
+    wait_cnt_++;
+    coeff_velocity_ = 0.0;
+
+    if(wait_cnt_ > 15) //1.5s
+    {
+      fill(left_velocity_.begin(), left_velocity_.end(), 0);
+      fill(right_velocity_.begin(), right_velocity_.end(), 0);
+      wait_cnt_  = 0;
+      wait_flag_ = false;
+    }
   }
+
+  geometry_msgs::Twist vel;
+  vel.linear.x = 1.0;
+  vel.linear.y = 1.0;
+
+  vel.linear.x *= coeff_velocity_;
+  vel.linear.y *= coeff_velocity_;
+
+  //if(velocity_filter_) velocityFilter(vel);
+
+  std::cout << "velocity r: " << vel.linear.y << std::endl << std::endl;
 }
 
 void DrivingNode::visualizationObstacle()
@@ -407,9 +447,9 @@ void DrivingNode::visualizationObstacle()
   obstacle_points_.pose.orientation.w = 1.0;
   obstacle_points_.scale.x = obstacle_points_.scale.y = obstacle_points_.scale.z = 1.2;
   obstacle_points_.color.a = 1.0;
-  obstacle_points_.color.r = 0.752;
-  obstacle_points_.color.g = 1.0;
-  obstacle_points_.color.b = 0.933;
+  obstacle_points_.color.r = 0.7;
+  obstacle_points_.color.g = 0.7;
+  obstacle_points_.color.b = 1.0;
 
   pub_object_point_.publish(obstacle_points_);
 }
