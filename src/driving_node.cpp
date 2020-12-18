@@ -362,7 +362,7 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
 
 void DrivingNode::perceptionObstacle()
 {
-  std::vector<std::pair<double, int>> index;
+  std::vector<std::pair<int, int>> index;
 
   //scoring obstacle
   for(int i=0; i<centroid_info_.size(); i++)
@@ -425,17 +425,6 @@ void DrivingNode::perceptionObstacle()
       wait_flag_ = false;
     }
   }
-
-  geometry_msgs::Twist vel;
-  vel.linear.x = 1.0;
-  vel.linear.y = 1.0;
-
-  vel.linear.x *= coeff_velocity_;
-  vel.linear.y *= coeff_velocity_;
-
-  //if(velocity_filter_) velocityFilter(vel);
-
-  std::cout << "velocity r: " << vel.linear.y << std::endl << std::endl;
 }
 
 void DrivingNode::visualizationObstacle()
