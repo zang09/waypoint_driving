@@ -17,6 +17,9 @@ DrivingNode::~DrivingNode()
 
 void DrivingNode::initParams()
 {
+  nh_.param<std::string>("/waypoint_driving/pointcloud_topic", pointcloud_topic_, " ");
+  nh_.param<std::string>("/waypoint_driving/odom_topic", odom_topic_, " ");
+
   nh_.param<bool>("/waypoint_driving/velocity_filter", velocity_filter_, true);
   nh_.param<int>("/waypoint_driving/filter_size", filter_size_, 20);
   nh_.param<int>("/waypoint_driving/max_filter_size", max_filter_size_, 50);
@@ -64,8 +67,8 @@ void DrivingNode::resetParams()
 void DrivingNode::subscribeAndPublish()
 {
   sub_waypoint_flag_   = nh_.subscribe<rviz_flag_plugin::PointArray>("rviz/flag_points", 10, &DrivingNode::waypointFlagHandler, this);
-  sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>("hdl_localization/odom", 100, &DrivingNode::odomHandler, this);
-  sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>("velodyne_points", 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
+  sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 100, &DrivingNode::odomHandler, this);
+  sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>(pointcloud_topic_, 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
   sub_segmented_cloud_ = nh_.subscribe<sensor_msgs::PointCloud2>("waypoint_driving/segmented_cloud_pure", 1, &DrivingNode::segmentCloudHandler, this, ros::TransportHints().tcpNoDelay());
 
   pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("waypoint_driving/motor_vel", 10);

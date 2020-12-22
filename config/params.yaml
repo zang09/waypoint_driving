@@ -1,5 +1,7 @@
 waypoint_driving:
-
+  pointcloud_topic: "velodyne_points"
+  odom_topic: "hdl_localization/odom"  #lio_sam/mapping/odometry
+  
   velocity_filter: true
   max_filter_size: 50
   filter_size: 15

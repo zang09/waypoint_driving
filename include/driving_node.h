@@ -114,6 +114,8 @@ private:
   double coeff_velocity_;
 
   int line_num_;
+  std::string pointcloud_topic_;
+  std::string odom_topic_;
   int filter_size_;
   int max_filter_size_;
   bool velocity_filter_;
