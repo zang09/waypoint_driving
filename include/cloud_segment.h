@@ -28,69 +28,18 @@
 #define RAD2DEG  180/PI
 #define DEG2RAD  PI/180
 
-typedef pcl::PointXYZI PointType;
-
-const std::string pointCloudTopic = "/velodyne_points";
-const std::string imuTopic = "/imu/data";
-
-// Using velodyne cloud "ring" channel for image projection (other lidar may have different name for this channel, change "PointXYZIR" below)
-const bool useCloudRing = true; // if true, ang_res_y and ang_bottom are not used
-
-// VLP-16
-const int N_SCAN = 16;
-const int Horizon_SCAN = 1800;
-const float ang_res_x = 0.2;
-const float ang_res_y = 2.0;
-const float ang_bottom = 15.0+0.1;
-const int groundScanInd = 7;
-
-const bool loopClosureEnableFlag = false;
-const double mappingProcessInterval = 0.3;
-
-const float scanPeriod = 0.1;
-const int systemDelay = 0;
-const int imuQueLength = 200;
-
-const float sensorMinimumRange = 1.0;
-const float sensorMountAngle = 0.0;
-const float segmentTheta = 60.0/180.0*M_PI; // decrese this value may improve accuracy
-const int segmentValidPointNum = 5;
-const int segmentValidLineNum = 3;
-const float segmentAlphaX = ang_res_x / 180.0 * M_PI;
-const float segmentAlphaY = ang_res_y / 180.0 * M_PI;
-
-const int edgeFeatureNum = 2;
-const int surfFeatureNum = 4;
-const int sectionsTotal = 6;
-const float edgeThreshold = 0.1;
-const float surfThreshold = 0.1;
-const float nearestFeatureSearchSqDist = 25;
-
-
-// Mapping Params
-const float surroundingKeyframeSearchRadius = 50.0; // key frame that is within n meters from current pose will be considerd for scan-to-map optimization (when loop closure disabled)
-const int   surroundingKeyframeSearchNum = 50; // submap size (when loop closure enabled)
-// history key frames (history submap for loop closure)
-const float historyKeyframeSearchRadius = 7.0; // key frame that is within n meters from current pose will be considerd for loop closure
-const int   historyKeyframeSearchNum = 25; // 2n+1 number of hostory key frames will be fused into a submap for loop closure
-const float historyKeyframeFitnessScore = 0.3; // the smaller the better alignment
-
-const float globalMapVisualizationSearchRadius = 500.0; // key frames with in n meters will be visualized
-
 struct smoothness_t{
     float value;
     size_t ind;
 };
 
 struct by_value{
-    bool operator()(smoothness_t const &left, smoothness_t const &right) {
+    bool operator()(smoothness_t const &left, smoothness_t const &right)
+    {
         return left.value < right.value;
     }
 };
 
-/*
-    * A point cloud type that has "ring" channel
-    */
 struct PointXYZIR
 {
     PCL_ADD_POINT4D
@@ -105,9 +54,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIR,
                                    (uint16_t, ring, ring)
 )
 
-/*
-    * A point cloud type that has 6D pose info ([x,y,z,roll,pitch,yaw] intensity is time stamp)
-    */
 struct PointXYZIRPYT
 {
     PCL_ADD_POINT4D
@@ -126,6 +72,86 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRPYT,
                                    (double, time, time)
 )
 
+typedef pcl::PointXYZI PointType;
 typedef PointXYZIRPYT  PointTypePose;
+
+class CloudSegment
+{
+public:
+  CloudSegment();
+  ~CloudSegment();
+
+  void initParams();
+  void allocateMemory();
+  void resetParameters();
+  void subscribeAndPublish();
+
+  void copyPointCloud(const sensor_msgs::PointCloud2ConstPtr& laser_cloud_msg);
+  void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laser_cloud_msg);
+  void projectPointCloud();
+  void groundRemoval();
+  void cloudSegmentation();
+  void labelComponents(int row, int col);
+  void publishCloud();
+
+private:
+  ros::NodeHandle nh_;
+
+  ros::Subscriber sub_laser_cloud_;
+  ros::Publisher pub_full_cloud_;
+  ros::Publisher pub_full_info_cloud_;
+  ros::Publisher pub_ground_cloud_;
+  ros::Publisher pub_segmented_cloud_;
+  ros::Publisher pub_segmented_cloud_pure_;
+  ros::Publisher pub_outlier_cloud_;
+
+  pcl::PointCloud<PointType>::Ptr  laser_cloud_in_;
+  pcl::PointCloud<PointXYZIR>::Ptr laser_cloud_in_ring_;
+
+  pcl::PointCloud<PointType>::Ptr full_cloud_; // projected velodyne raw cloud, but saved in the form of 1-D matrix
+  pcl::PointCloud<PointType>::Ptr full_info_cloud_; // same as fullCloud, but with intensity - range
+
+  pcl::PointCloud<PointType>::Ptr ground_cloud_;
+  pcl::PointCloud<PointType>::Ptr segmented_cloud_;
+  pcl::PointCloud<PointType>::Ptr segmented_cloud_pure_;
+  pcl::PointCloud<PointType>::Ptr outlier_cloud_;
+
+  PointType nan_point_; // fill in fullCloud at each iteration
+
+  cv::Mat range_mat_;   // range matrix for range image
+  cv::Mat ground_mat_;  // ground matrix for ground cloud marking
+  cv::Mat label_mat_;   // label matrix for segmentaiton marking
+  int label_cnt_;
+
+  std_msgs::Header cloud_header_;
+
+  std::vector<std::pair<int8_t, int8_t> > neighbor_iterator_; // neighbor iterator for segmentaiton process
+
+  uint16_t *all_pushed_idx_x_;     // array for tracking points of a segmented object
+  uint16_t *all_pushed_idx_y_;
+
+  uint16_t *queue_idx_x_;          // array for breadth-first search process of segmentation, for speed
+  uint16_t *queue_idx_y_;
+
+  //Parmameters
+  std::string pointcloud_topic_;
+  bool use_cloud_ring_;            // if true, ang_res_y and ang_bottom are not used
+
+  // for vlp-16
+  int scan_num_;
+  int horizon_scan_;
+  int ground_scan_idx_;
+  float ang_res_x_;
+  float ang_res_y_;
+  float ang_bottom_;
+
+  float sensor_minimum_range_;
+  float sensor_mount_angle_;
+  float segment_theta_;            // decrese this value may improve accuracy
+  float segment_alpha_x_;
+  float segment_alpha_y_;
+  int   segment_valid_point_num_;
+  int   segment_valid_line_num_;
+};
 
 #endif /* cloud_segment_CLOUD_SEGMENT_H_ */
