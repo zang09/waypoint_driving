@@ -128,7 +128,8 @@ private:
 
   // Control Param
   float  beta_;               // chose 0.1~0.9 begger, turn faster
-  float  mean_vel_;           // straight speed m/s
+  float  min_vel_;            // for round case object detection
+  float  max_vel_;            // straight speed m/s
   float  turn_rad_;           // turn radius [m]
   float  border_dist_;        // boundary distance
   double border_ang_;         // boundary angle (deg -> rad) turn angle difference satuated at border_ang_

@@ -32,7 +32,8 @@ void DrivingNode::initParams()
   nh_.param<float>("/waypoint_driving/max_detect_range", max_detect_range_, 8.0);
 
   nh_.param<float>("/waypoint_driving/beta", beta_, 0.5);
-  nh_.param<float>("/waypoint_driving/mean_velocity", mean_vel_, 1.0);
+  nh_.param<float>("/waypoint_driving/min_velocity", min_vel_, 0.2);
+  nh_.param<float>("/waypoint_driving/max_velocity", max_vel_, 1.0);
   nh_.param<float>("/waypoint_driving/turn_radius", turn_rad_, 1.25); //0.5
   nh_.param<float>("/waypoint_driving/boundary_distance", border_dist_, 1.25); //turn_radius*2
   nh_.param<double>("/waypoint_driving/border_angle", border_ang_, 30);
@@ -377,27 +378,33 @@ void DrivingNode::perceptionObstacle()
 
     if( abs(y) < (robot_width_/2.f + surplus_range_) ) /*straight case*/
     {
-      if(dist < stop_detect_range_) {
+      if(dist < stop_detect_range_)
+      {
         score = 0;
         index.push_back(std::make_pair(score, i));
 
         wait_cnt_  = 0;
         wait_flag_ = true;
 
-        ROS_INFO("Distance: %lf, Y: %lf", dist, y);
+        printf("Stop !, distance: %lf, y: %lf\n", dist, y);
       }
-      else if(dist < max_detect_range_) {
-        score = 1-1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
+      else if(dist < max_detect_range_)
+      {
+        score = 1 - 1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
         index.push_back(std::make_pair(score, i));
+
+        printf("Str  !, distance: %lf, score: %lf\n", dist, score);
       }
     }
     else /*round case*/
     {
-      float min_vel = 0.2;
-
-      if(dist < max_detect_range_) {
-        score = ((1-min_vel)/(max_detect_range_)*dist) + min_vel;
+      if(dist < max_detect_range_)
+      {
+        //score = 1 - (1-min_vel_)/pow(max_detect_range_, 2)*pow(dist-max_detect_range_, 2);
+        score = min_vel_ + (1-min_vel_)/max_detect_range_*dist;
         index.push_back(std::make_pair(score, i));
+
+        printf("Round!, distance: %lf, score: %lf\n", dist, score);
       }
     }
   }
@@ -521,8 +528,8 @@ void DrivingNode::calculateTargetVel(double &left_vel, double &right_vel)
   }
 
   double alpha = 0.05 + beta_*abs(tanh(delta_angle/border_ang_));
-  right_vel = (1-alpha)*mean_vel_ + alpha*mean_vel_*(-tanh(delta_angle/border_ang_));
-  left_vel  = (1-alpha)*mean_vel_ + alpha*mean_vel_*(+tanh(delta_angle/border_ang_));
+  right_vel = (1-alpha)*max_vel_ + alpha*max_vel_*(-tanh(delta_angle/border_ang_));
+  left_vel  = (1-alpha)*max_vel_ + alpha*max_vel_*(+tanh(delta_angle/border_ang_));
 }
 
 void DrivingNode::visualizationVirtualPoint()
