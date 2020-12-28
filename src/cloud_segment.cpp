@@ -295,7 +295,8 @@ void CloudSegment::cloudSegmentation()
       for (size_t j = 0; j < horizon_scan_; ++j){
         if (label_mat_.at<int>(i,j) > 0 && label_mat_.at<int>(i,j) != 999999){
           segmented_cloud_pure_->push_back(full_cloud_->points[j + i*horizon_scan_]);
-          segmented_cloud_pure_->points.back().intensity = label_mat_.at<int>(i,j);
+          //segmented_cloud_pure_->points.back().intensity = label_mat_.at<int>(i,j);
+          segmented_cloud_pure_->points.back().intensity = j;
         }
       }
     }
@@ -408,13 +409,13 @@ void CloudSegment::publishCloud()
   sensor_msgs::PointCloud2 laserCloudTemp;
   pcl::toROSMsg(*outlier_cloud_, laserCloudTemp);
   laserCloudTemp.header.stamp = cloud_header_.stamp;
-  laserCloudTemp.header.frame_id = "map";
+  laserCloudTemp.header.frame_id = "base_link";
   pub_outlier_cloud_.publish(laserCloudTemp);
 
   // segmented cloud with ground
   pcl::toROSMsg(*segmented_cloud_, laserCloudTemp);
   laserCloudTemp.header.stamp = cloud_header_.stamp;
-  laserCloudTemp.header.frame_id = "map";
+  laserCloudTemp.header.frame_id = "base_link";
   pub_segmented_cloud_.publish(laserCloudTemp);
 
   // projected full cloud
@@ -422,7 +423,7 @@ void CloudSegment::publishCloud()
   {
     pcl::toROSMsg(*full_cloud_, laserCloudTemp);
     laserCloudTemp.header.stamp = cloud_header_.stamp;
-    laserCloudTemp.header.frame_id = "map";
+    laserCloudTemp.header.frame_id = "base_link";
     pub_full_cloud_.publish(laserCloudTemp);
   }
 
@@ -431,7 +432,7 @@ void CloudSegment::publishCloud()
   {
     pcl::toROSMsg(*ground_cloud_, laserCloudTemp);
     laserCloudTemp.header.stamp = cloud_header_.stamp;
-    laserCloudTemp.header.frame_id = "map";
+    laserCloudTemp.header.frame_id = "base_link";
     pub_ground_cloud_.publish(laserCloudTemp);
   }
 
@@ -440,7 +441,7 @@ void CloudSegment::publishCloud()
   {
     pcl::toROSMsg(*segmented_cloud_pure_, laserCloudTemp);
     laserCloudTemp.header.stamp = cloud_header_.stamp;
-    laserCloudTemp.header.frame_id = "map";
+    laserCloudTemp.header.frame_id = "base_link";
     pub_segmented_cloud_pure_.publish(laserCloudTemp);
   }
 
@@ -449,7 +450,7 @@ void CloudSegment::publishCloud()
   {
     pcl::toROSMsg(*full_info_cloud_, laserCloudTemp);
     laserCloudTemp.header.stamp = cloud_header_.stamp;
-    laserCloudTemp.header.frame_id = "map";
+    laserCloudTemp.header.frame_id = "base_link";
     pub_full_info_cloud_.publish(laserCloudTemp);
   }
 }

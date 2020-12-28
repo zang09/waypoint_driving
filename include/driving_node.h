@@ -33,6 +33,7 @@
 #define DEG2RAD  PI/180
 
 typedef pcl::PointXYZI PointType;
+typedef pcl::PointXYZINormal PointTypeFull;
 
 struct Line
 {
@@ -41,6 +42,20 @@ struct Line
   double angle_rad;
   double angle_deg;
 };
+
+bool customRegionGrowing (const PointType& point_a, const PointType& point_b, float squared_distance)
+{
+  if ((std::abs(point_a.x - point_b.x) < 0.1) && (std::abs(point_a.y - point_b.y) < 0.1)) //10cm
+  {
+    return (true);
+  }
+  else
+  {
+//    if (std::abs (point_a.intensity - point_b.intensity) < 3.0f)
+//      return (true);
+    return (false);
+  }
+}
 
 class DrivingNode
 {
@@ -60,6 +75,7 @@ public:
   void limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
   void smoothingCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
   void euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
+  void euclideanConditionalClusteredCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
   void perceptionObstacle();
   void visualizationObstacle();
   void calculateLineSegment();

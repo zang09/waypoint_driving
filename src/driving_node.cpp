@@ -141,6 +141,7 @@ void DrivingNode::segmentCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &
   //smoothingCloud(*seg_roi_cloud_, smoothing_cloud_);
 
   euclideanClusteredCloud(*seg_roi_cloud_, clustered_cloud_);
+  //euclideanConditionalClusteredCloud(*seg_roi_cloud_, clustered_cloud_);
 
   perceptionObstacle();
 
@@ -187,7 +188,7 @@ void DrivingNode::limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::Point
 
   float x,y;
   pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-  pcl::ExtractIndices<PointType> extract;  
+  pcl::ExtractIndices<PointType> extract;
 
   for (size_t i=0; i<cloud_in.points.size(); i++)
   {
@@ -326,16 +327,22 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
   if(cloud_in.empty())
     return;
 
+  pcl::PointCloud<PointType>::Ptr cloud_in_flat (new pcl::PointCloud<PointType>);
+  pcl::copyPointCloud(cloud_in, *cloud_in_flat);
+  for(size_t i=0; i<cloud_in.size(); i++) {
+    cloud_in_flat->points[i].z = 0;
+  }
+
   pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>);
-  tree->setInputCloud(cloud_in.makeShared());
+  tree->setInputCloud(cloud_in_flat);
 
   std::vector<pcl::PointIndices> cluster_indices;
   pcl::EuclideanClusterExtraction<PointType> ec;
-  ec.setClusterTolerance (0.4); // 0.35m
+  ec.setClusterTolerance (0.15); // 0.4m
   ec.setMinClusterSize (20);
-  ec.setMaxClusterSize (1000);
+  ec.setMaxClusterSize (500);
   ec.setSearchMethod (tree);
-  ec.setInputCloud (cloud_in.makeShared());
+  ec.setInputCloud (cloud_in_flat);
   ec.extract (cluster_indices);
 
   //std::cout << "Number of clusters is equal to " << cluster_indices.size () << std::endl;
@@ -364,6 +371,45 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
   pcl::copyPointCloud(total_cloud, *cloud_out);
 }
 
+void DrivingNode::euclideanConditionalClusteredCloud(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out)
+{
+  if(cloud_in.empty())
+    return;
+
+  pcl::IndicesClustersPtr clusters (new pcl::IndicesClusters);
+  pcl::search::KdTree<PointType>::Ptr search_tree (new pcl::search::KdTree<PointType>);
+
+  // Set up a Conditional Euclidean Clustering class
+  pcl::ConditionalEuclideanClustering<PointType> cec (false);
+  cec.setInputCloud (cloud_in.makeShared());
+  cec.setConditionFunction (&customRegionGrowing);
+  cec.setClusterTolerance (1.0); // Radius value
+  cec.setMinClusterSize (20);
+  cec.setMaxClusterSize (1000);
+  cec.segment (*clusters);
+
+  pcl::PointCloud<PointType> total_cloud;
+  for (size_t i=0; i<clusters->size(); i++)
+  {
+    pcl::CentroidPoint<pcl::PointXYZ> centroid;
+
+    for (std::vector<int>::iterator pit = clusters->at(i).indices.begin(); pit != clusters->at(i).indices.end(); ++pit)
+    {
+      PointType pt = cloud_in.points[*pit];
+      pt.intensity = (float)i*5;
+
+      centroid.add (pcl::PointXYZ (pt.x, pt.y, pt.z));
+      total_cloud.push_back(pt);
+    }
+
+    pcl::PointXYZ cp;
+    centroid.get(cp);
+    centroid_info_.push_back(cp);
+  }
+
+  pcl::copyPointCloud(total_cloud, *cloud_out);
+}
+
 void DrivingNode::perceptionObstacle()
 {
   std::vector<std::pair<double, int>> index;
@@ -385,43 +431,42 @@ void DrivingNode::perceptionObstacle()
 
         wait_cnt_  = 0;
         wait_flag_ = true;
-
-        printf("Stop !, distance: %lf, y: %lf\n", dist, y);
       }
       else if(dist < max_detect_range_)
       {
         score = 1 - 1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
         index.push_back(std::make_pair(score, i));
-
-        printf("Str  !, distance: %lf, score: %lf\n", dist, score);
       }
     }
     else /*round case*/
     {
       if(dist < max_detect_range_)
       {
-        //score = 1 - (1-min_vel_)/pow(max_detect_range_, 2)*pow(dist-max_detect_range_, 2);
-        score = min_vel_ + (1-min_vel_)/max_detect_range_*dist;
+        score = 1 - (1-min_vel_)/pow(max_detect_range_, 2)*pow(dist-max_detect_range_, 2);
         index.push_back(std::make_pair(score, i));
-
-        printf("Round!, distance: %lf, score: %lf\n", dist, score);
       }
     }
   }
 
-  if(index.empty()) {
+  if(index.empty())
+  {
     coeff_velocity_ = 1.0;
   }
-  else {
+  else
+  {
     std::sort(index.begin(), index.end());
 
     geometry_msgs::Point p;
     p.x = centroid_info_[index[0].second].x;
     p.y = centroid_info_[index[0].second].y;
     p.z = centroid_info_[index[0].second].z;
+
     obstacle_points_.points.push_back(p);
 
     coeff_velocity_ = index[0].first;
+
+    double dist = sqrt(p.x*p.x + p.y*p.y);
+    printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.2lf\n", dist, p.x, p.y, coeff_velocity_);
   }
 
   if(wait_flag_)
@@ -429,7 +474,7 @@ void DrivingNode::perceptionObstacle()
     wait_cnt_++;
     coeff_velocity_ = 0.0;
 
-    if(wait_cnt_ > 15) //1.5s
+    if(wait_cnt_ > 20) // 2s
     {
       fill(left_velocity_.begin(), left_velocity_.end(), 0);
       fill(right_velocity_.begin(), right_velocity_.end(), 0);
