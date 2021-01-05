@@ -433,6 +433,7 @@ void DrivingNode::perceptionObstacle()
 
         wait_cnt_  = 0;
         wait_flag_ = true;
+        break;
       }
       else if(dist < max_detect_range_)
       {
@@ -468,7 +469,7 @@ void DrivingNode::perceptionObstacle()
     coeff_velocity_ = index[0].first;
 
     double dist = sqrt(p.x*p.x + p.y*p.y);
-    printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.2lf\n", dist, p.x, p.y, coeff_velocity_);
+    printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.4lf\n", dist, p.x, p.y, coeff_velocity_);
   }
 
   if(wait_flag_)

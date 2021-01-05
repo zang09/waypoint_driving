@@ -11,7 +11,7 @@ waypoint_driving:
   parabola_p: 30
   surplus_range: 0.3            # [m]
   stop_detect_range: 1.5        # [m]  
-  max_detect_range: 5.0         # [m]
+  max_detect_range: 7.0         # [m]
   
   beta: 0.2                     # chose 0.1~0.9 begger, turn faster
   min_velocity: 0.3             # for round case object detection
