@@ -8,7 +8,7 @@ CloudSegment::CloudSegment() :
   ang_res_x_(0.2),
   ang_res_y_(2.0),
   ang_bottom_(15.0+0.1),
-  sensor_minimum_range_(1.0),
+  sensor_minimum_range_(0.4),
   sensor_mount_angle_(0.0),
   segment_theta_(60.0*DEG2RAD),
   segment_alpha_x_(ang_res_x_*DEG2RAD),

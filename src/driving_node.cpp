@@ -186,7 +186,7 @@ void DrivingNode::limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::Point
   if(cloud_in.empty())
     return;
 
-  float x,y;
+  float x, y, distance;
   pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
   pcl::ExtractIndices<PointType> extract;
 
@@ -196,7 +196,9 @@ void DrivingNode::limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::Point
     x = cloud_in.points[i].y;
     y = cloud_in.points[i].x;
 
-    if ( y>0 &&
+    distance = sqrt(x*x+y*y);
+
+    if ( y>(-0.3) && distance <= max_detect_range_ &&
          (y*y)-(4*parabola_p_*(x-(robot_width_/2+parabola_axis_)))>0 &&
          (y*y)+(4*parabola_p_*(x+(robot_width_/2+parabola_axis_)))>0 )
     {
@@ -338,9 +340,9 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
 
   std::vector<pcl::PointIndices> cluster_indices;
   pcl::EuclideanClusterExtraction<PointType> ec;
-  ec.setClusterTolerance (0.15); // 0.4m
+  ec.setClusterTolerance (0.05); // 0.15m
   ec.setMinClusterSize (20);
-  ec.setMaxClusterSize (500);
+  ec.setMaxClusterSize (2000);
   ec.setSearchMethod (tree);
   ec.setInputCloud (cloud_in_flat);
   ec.extract (cluster_indices);
