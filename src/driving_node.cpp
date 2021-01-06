@@ -575,9 +575,16 @@ void DrivingNode::calculateTargetVel(double &left_vel, double &right_vel)
     line_num_++;
   }
 
+  double turn_coeff_vel = 1.0;
+  double angle = abs(delta_angle*RAD2DEG);
+  if(angle >= 50)
+  {
+    turn_coeff_vel = 1.0 - (0.5/(180-50)*angle - 0.5*50/(180-50));
+  }
+
   double alpha = 0.05 + beta_*abs(tanh(delta_angle/border_ang_));
-  right_vel = (1-alpha)*max_vel_ + alpha*max_vel_*(-tanh(delta_angle/border_ang_));
-  left_vel  = (1-alpha)*max_vel_ + alpha*max_vel_*(+tanh(delta_angle/border_ang_));
+  right_vel = (1-alpha)*max_vel_ + alpha*max_vel_*(-tanh(delta_angle/border_ang_))*turn_coeff_vel;
+  left_vel  = (1-alpha)*max_vel_ + alpha*max_vel_*(+tanh(delta_angle/border_ang_))*turn_coeff_vel;
 }
 
 void DrivingNode::visualizationVirtualPoint()
