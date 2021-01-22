@@ -5,7 +5,9 @@
   <description>
      The waypoint_driving package
   </description>
-<license>Apache 2.0</license>
+
+  <license>Apache 2.0</license>
+
   <maintainer email="zang09@naver.com">Hae-bum Jung</maintainer>
   <author>Hae-bum Jung</author>
   

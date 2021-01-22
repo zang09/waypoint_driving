@@ -596,6 +596,7 @@ void DrivingNode::visualizationVirtualPoint()
 
   virtual_p.x = project_p.x + virtual_point_dist_*cos(line_info_.at(line_num_).angle_rad);
   virtual_p.y = project_p.y + virtual_point_dist_*sin(line_info_.at(line_num_).angle_rad);
+  virtual_p.z = current_pose_.position.z;
 
   visualization_msgs::Marker points;
   points.header.frame_id = "map";
@@ -634,13 +635,13 @@ double DrivingNode::projectionLengthToLine(Point s_p, Point e_p, Point c_p)
   double value = -(c_p.x-s_p.x)*sin(angle) + (c_p.y-s_p.y)*cos(angle);
 
   /*
-    double delta_x = e_p.x - s_p.x;
-    double delta_y = e_p.y - s_p.y;
-    double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
-    double sin_theta = delta_y / delat_l;
-    double cos_theta = delta_x / delat_l;
-    double value = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
-    */
+  double delta_x = e_p.x - s_p.x;
+  double delta_y = e_p.y - s_p.y;
+  double delat_l = sqrt(pow(delta_x,2)+pow(delta_y,2));
+  double sin_theta = delta_y / delat_l;
+  double cos_theta = delta_x / delat_l;
+  double value = -(c_p.x-s_p.x)*sin_theta + (c_p.y-s_p.y)*cos_theta;
+  */
 
   return value;
 }

@@ -11,10 +11,10 @@
 #define DC1_A_PIN      6 
 #define DC1_B_PIN      7 
 
-#define VESC1_PIN      9 
-#define VESC2_PIN      10 
-#define VESC3_PIN      11 
-#define VESC4_PIN      12 
+#define VESC1_PIN      9   //L
+#define VESC2_PIN      10  //R
+#define VESC3_PIN      11  //R
+#define VESC4_PIN      12  //L
 #define DC_INHIBIT_PIN 22 
 
 #define STOP           0 
@@ -215,18 +215,22 @@ void funcParsing(char c)
     progress_bar_ = 3;
     cur_max_val_  = (progress_bar_+2)*10;   //50
   } 
-  else if (c == 'm') {
+  else if (c == 'm') 
+  {
     auto_mode_ = false;
   }
-  else if (c == 'a') {
+  else if (c == 'a') 
+  {
     auto_mode_ = true;
   }
-  else if (c == 'u') {
+  else if (c == 'u') 
+  {
     pre_max_val_    = cur_max_val_; 
     cur_max_val_    = 40;  //static
     dc_motor_state_ = UP; 
   }
-  else if (c == 'd') {
+  else if (c == 'd') 
+  {
     pre_max_val_    = cur_max_val_; 
     cur_max_val_    = 40;  //static
     dc_motor_state_ = DOWN;
@@ -234,14 +238,14 @@ void funcParsing(char c)
   else if (c == 'l')  
   {     
     pre_max_val_      = cur_max_val_; 
-    cur_max_val_      = 12;  //static
+    cur_max_val_      = 12;  //static v3:12, v4: 20
     bldc_motor_state_ = LEFT; 
     bldc_turn_mode_   = true; 
   } 
   else if (c == 'r')  
   { 
     pre_max_val_      = cur_max_val_; 
-    cur_max_val_      = 12;  //static
+    cur_max_val_      = 12;  //static v3:12, v4: 20
     bldc_motor_state_ = RIGHT; 
     bldc_turn_mode_   = true; 
   } 
