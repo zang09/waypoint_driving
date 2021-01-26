@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 #include <rviz_flag_plugin/PointArray.h>
 #include <nav_msgs/Odometry.h>
+#include <gazebo_msgs/ModelStates.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
 #include <tf/tf.h>
@@ -70,6 +71,7 @@ public:
 
   void waypointFlagHandler(const rviz_flag_plugin::PointArrayConstPtr &point_msg);
   void odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg);
+  void gazeboOdomHandler(const gazebo_msgs::ModelStates::ConstPtr &odom_msg);
   void cloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg);
   void segmentCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &cloud_msg);
   void limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::PointCloud<PointType>::Ptr cloud_out);
@@ -96,6 +98,7 @@ private:
   ros::Subscriber sub_current_odom_;
   ros::Subscriber sub_point_cloud_;
   ros::Subscriber sub_segmented_cloud_;
+  ros::Subscriber sub_gazebo_odom_;
   ros::Publisher  pub_motor_vel_;
   ros::Publisher  pub_line_strip_;
   ros::Publisher  pub_virtual_point_;

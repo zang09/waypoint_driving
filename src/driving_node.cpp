@@ -62,17 +62,18 @@ void DrivingNode::resetParams()
   clustered_cloud_->clear();
 
   centroid_info_.clear();
-  obstacle_points_.points.clear();
+  //obstacle_points_.points.clear();
 }
 
 void DrivingNode::subscribeAndPublish()
 {
   sub_waypoint_flag_   = nh_.subscribe<rviz_flag_plugin::PointArray>("rviz/flag_points", 10, &DrivingNode::waypointFlagHandler, this);
   sub_current_odom_    = nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 100, &DrivingNode::odomHandler, this);
+  sub_gazebo_odom_     = nh_.subscribe<gazebo_msgs::ModelStates>("/gazebo/model_states", 10, &DrivingNode::gazeboOdomHandler, this);
   sub_point_cloud_     = nh_.subscribe<sensor_msgs::PointCloud2>(pointcloud_topic_, 1, &DrivingNode::cloudHandler, this, ros::TransportHints().tcpNoDelay());
   sub_segmented_cloud_ = nh_.subscribe<sensor_msgs::PointCloud2>("waypoint_driving/segmented_cloud_pure", 1, &DrivingNode::segmentCloudHandler, this, ros::TransportHints().tcpNoDelay());
 
-  pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("waypoint_driving/motor_vel", 10);
+  pub_motor_vel_       = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
   pub_line_strip_      = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/flag_line", 1);
   pub_virtual_point_   = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/robot/virtual_point", 1);
   pub_object_point_    = nh_.advertise<visualization_msgs::Marker>("waypoint_driving/object/centroid_point", 1);
@@ -109,6 +110,43 @@ void DrivingNode::odomHandler(const nav_msgs::Odometry::ConstPtr &odom_msg)
 
     vel.linear.x = left_vel;
     vel.linear.y = right_vel;
+
+    if(line_num_ >= (int)line_info_.size()) return;
+
+    visualizationVirtualPoint();
+    visualizationReferenceAngle();
+  }
+  else
+  {
+    vel.linear.x = 0.0;
+    vel.linear.y = 0.0;
+  }
+
+  vel.linear.x *= coeff_velocity_;
+  vel.linear.y *= coeff_velocity_;
+
+  if(velocity_filter_) velocityFilter(vel);
+
+  //std::cout << "velocity l: " << vel.linear.x << std::endl;
+  //std::cout << "velocity r: " << vel.linear.y << std::endl << std::endl;
+  pub_motor_vel_.publish(vel);
+}
+
+void DrivingNode::gazeboOdomHandler(const gazebo_msgs::ModelStates::ConstPtr &odom_msg)
+{
+  current_pose_.position    = odom_msg->pose.back().position;
+  current_pose_.orientation = odom_msg->pose.back().orientation;
+  current_yaw_ = getYawFromQuaternion(current_pose_.orientation);
+
+  geometry_msgs::Twist vel;
+
+  if(line_num_ < (int)line_info_.size())
+  {
+    double left_vel, right_vel;
+    calculateTargetVel(left_vel, right_vel);
+
+    vel.linear.x = (left_vel+right_vel)/2;
+    vel.angular.z = (right_vel-left_vel);
 
     if(line_num_ >= (int)line_info_.size()) return;
 
@@ -342,7 +380,7 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
   pcl::EuclideanClusterExtraction<PointType> ec;
   ec.setClusterTolerance (0.05); // 0.15m
   ec.setMinClusterSize (20);
-  ec.setMaxClusterSize (2000);
+  //ec.setMaxClusterSize (2000);
   ec.setSearchMethod (tree);
   ec.setInputCloud (cloud_in_flat);
   ec.extract (cluster_indices);
@@ -451,6 +489,7 @@ void DrivingNode::perceptionObstacle()
     }
   }
 
+  obstacle_points_.points.clear();
   if(index.empty())
   {
     coeff_velocity_ = 1.0;
@@ -469,7 +508,7 @@ void DrivingNode::perceptionObstacle()
     coeff_velocity_ = index[0].first;
 
     double dist = sqrt(p.x*p.x + p.y*p.y);
-    printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.4lf\n", dist, p.x, p.y, coeff_velocity_);
+    //printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.4lf\n", dist, p.x, p.y, coeff_velocity_);
   }
 
   if(wait_flag_)
@@ -500,7 +539,7 @@ void DrivingNode::visualizationObstacle()
   obstacle_points_.color.g = 0.7;
   obstacle_points_.color.b = 1.0;
 
-  pub_object_point_.publish(obstacle_points_);
+  pub_object_point_.publish(obstacle_points_);  
 }
 
 void DrivingNode::calculateLineSegment()
@@ -552,15 +591,60 @@ void DrivingNode::visualizationSegmentedLine()
 }
 
 void DrivingNode::calculateTargetVel(double &left_vel, double &right_vel)
-{
-  //Projection distance from line segment
-  double projection_value = projectionLengthToLine(line_info_.at(line_num_).start_point,
-                                                   line_info_.at(line_num_).end_point,
-                                                   current_pose_.position);
+{  
+  Point project_p, virtual_p;
+  project_p = projectionPointToLine(line_info_.at(line_num_).start_point,
+                                    line_info_.at(line_num_).end_point,
+                                    current_pose_.position);
 
-  double virtual_angle = atan2(projection_value, virtual_point_dist_);
-  reference_angle_ = line_info_.at(line_num_).angle_rad - virtual_angle;
-  double delta_angle = current_yaw_ - reference_angle_;
+  virtual_p.x = project_p.x + virtual_point_dist_*cos(line_info_.at(line_num_).angle_rad);
+  virtual_p.y = project_p.y + virtual_point_dist_*sin(line_info_.at(line_num_).angle_rad);
+
+  double x,y,xd,yd,xa,ya,da,ex,ey,vax,vay,Ex,Ey;
+  double alpha2,beta2,Ra,ra;
+
+  alpha2 = 1.0;
+  beta2 = 0.8;
+  ra = 1.2;
+  Ra = 1.5;
+
+  x  = current_pose_.position.x;
+  y  = current_pose_.position.y;
+  xd = virtual_p.x;
+  yd = virtual_p.y;
+
+  ex = x - xd;
+  ey = y - yd;
+
+  if(obstacle_points_.points.empty())
+  {
+    vax = 0;
+    vay = 0;
+  }
+  else
+  {
+    xa = obstacle_points_.points[0].x;
+    ya = obstacle_points_.points[0].y;
+    da = sqrt(pow(xa/alpha2, 2) + pow(ya/beta2, 2));
+
+    std::cout << "da: " << da << std::endl;
+
+    if (da >= Ra || da < ra)
+    {
+      vax = 0;
+      vay = 0;
+    }
+    else if(da > ra && da < Ra)
+    {
+      vax = 4*(Ra*Ra - ra*ra) * (da*da - Ra*Ra) * (x - xa) / pow(da*da - ra*ra, 3);
+      vay = 4*(Ra*Ra - ra*ra) * (da*da - Ra*Ra) * (y - ya) / pow(da*da - ra*ra, 3);
+    }
+  }
+
+  Ex = ex + vax;
+  Ey = ey + vay;
+
+  double delta_angle = current_yaw_ - atan2(-Ey, -Ex);
 
   if(delta_angle < -PI) delta_angle += 2*PI;
   else if(delta_angle > PI) delta_angle -= 2*PI;
@@ -577,10 +661,10 @@ void DrivingNode::calculateTargetVel(double &left_vel, double &right_vel)
 
   double turn_coeff_vel = 1.0;
   double angle = abs(delta_angle*RAD2DEG);
-  if(angle >= 50)
-  {
-    turn_coeff_vel = 1.0 - (0.5/(180-50)*angle - 0.5*50/(180-50));
-  }
+//  if(angle >= 50)
+//  {
+//    turn_coeff_vel = 1.0 - (0.5/(180-50)*angle - 0.5*50/(180-50));
+//  }
 
   double alpha = 0.05 + beta_*abs(tanh(delta_angle/border_ang_));
   right_vel = (1-alpha)*max_vel_ + alpha*max_vel_*(-tanh(delta_angle/border_ang_))*turn_coeff_vel;
