@@ -7,6 +7,7 @@
 #include <gazebo_msgs/ModelStates.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
+#include <rviz_visual_tools/rviz_visual_tools.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 
@@ -33,8 +34,17 @@
 #define RAD2DEG  180/PI
 #define DEG2RAD  PI/180
 
+namespace rvt = rviz_visual_tools;
+
+
 typedef pcl::PointXYZI PointType;
 typedef pcl::PointXYZINormal PointTypeFull;
+
+struct CuboidInfo
+{
+  geometry_msgs::Point max_point;
+  geometry_msgs::Point min_point;
+};
 
 struct Line
 {
@@ -57,6 +67,41 @@ bool customRegionGrowing (const PointType& point_a, const PointType& point_b, fl
     return (false);
   }
 }
+
+class Cuboid
+{
+public:
+  Cuboid()
+  {}
+
+  void add (const geometry_msgs::Point point)
+  {
+    if(first_added_)
+    {
+      ci_.max_point = point;
+      ci_.min_point = point;
+      first_added_ = false;
+    }
+    else
+    {
+      if(point.x >= ci_.max_point.x) ci_.max_point.x = point.x;
+      if(point.y >= ci_.max_point.y) ci_.max_point.y = point.y;
+      if(point.z >= ci_.max_point.z) ci_.max_point.z = point.z;
+      if(point.x <= ci_.min_point.x) ci_.min_point.x = point.x;
+      if(point.y <= ci_.min_point.y) ci_.min_point.y = point.y;
+      if(point.z <= ci_.min_point.z) ci_.min_point.z = point.z;
+    }
+  }
+
+  void get (CuboidInfo &point) const
+  {
+    point = ci_;
+  }
+
+private:
+  CuboidInfo ci_;
+  bool first_added_ = true;
+};
 
 class DrivingNode
 {
@@ -93,6 +138,8 @@ public:
 private:
   // ROS
   ros::NodeHandle nh_;
+  // For visualizing things in rviz
+  rvt::RvizVisualToolsPtr visual_tools_;
 
   ros::Subscriber sub_waypoint_flag_;
   ros::Subscriber sub_current_odom_;
@@ -113,6 +160,8 @@ private:
   geometry_msgs::Pose  current_pose_;
 
   std::vector<Line> line_info_;
+  std::vector<CuboidInfo> cuboid_info_;
+  std::vector<CuboidInfo> cuboid_info_sort_;
   visualization_msgs::Marker line_strip_;
   geometry_msgs::Point origin_point_;
   std::vector<geometry_msgs::Point> target_points_;

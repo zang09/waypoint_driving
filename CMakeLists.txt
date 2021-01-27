@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   sensor_msgs
   rviz_flag_plugin
+  rviz_visual_tools
 )
 
 find_package(PCL REQUIRED QUIET)

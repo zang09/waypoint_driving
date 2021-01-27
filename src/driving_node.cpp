@@ -52,6 +52,8 @@ void DrivingNode::allocateMemory()
   seg_roi_cloud_.reset(new pcl::PointCloud<PointType>());
   smoothing_cloud_.reset(new pcl::PointCloud<PointType>());
   clustered_cloud_.reset(new pcl::PointCloud<PointType>());
+
+  visual_tools_.reset(new rvt::RvizVisualTools("base_link", "/rviz_visual_tools"));
 }
 
 void DrivingNode::resetParams()
@@ -62,6 +64,7 @@ void DrivingNode::resetParams()
   clustered_cloud_->clear();
 
   centroid_info_.clear();
+  cuboid_info_.clear();
   //obstacle_points_.points.clear();
 }
 
@@ -392,19 +395,28 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
   for (std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin(); it!=cluster_indices.end(); ++it)
   {
     pcl::CentroidPoint<pcl::PointXYZ> centroid;
+    Cuboid cuboid;
 
     for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
     {
       PointType pt = cloud_in.points[*pit];
       pt.intensity = (float)i*5;
-
       centroid.add (pcl::PointXYZ (pt.x, pt.y, pt.z));
+
+      geometry_msgs::Point p;
+      p.x=pt.x; p.y=pt.y; p.z=pt.z;
+      cuboid.add (p);
+
       total_cloud.push_back(pt);
     }
 
     pcl::PointXYZ cp;
     centroid.get(cp);
     centroid_info_.push_back(cp);
+
+    CuboidInfo ci;
+    cuboid.get(ci);
+    cuboid_info_.push_back(ci);
     i++;
   }
 
@@ -490,6 +502,7 @@ void DrivingNode::perceptionObstacle()
   }
 
   obstacle_points_.points.clear();
+  cuboid_info_sort_.clear();
   if(index.empty())
   {
     coeff_velocity_ = 1.0;
@@ -499,11 +512,15 @@ void DrivingNode::perceptionObstacle()
     std::sort(index.begin(), index.end());
 
     geometry_msgs::Point p;
-    p.x = centroid_info_[index[0].second].x;
-    p.y = centroid_info_[index[0].second].y;
-    p.z = centroid_info_[index[0].second].z;
+    for(int i=0; i<index.size(); i++)
+    {
+      p.x = centroid_info_[index[i].second].x;
+      p.y = centroid_info_[index[i].second].y;
+      p.z = centroid_info_[index[i].second].z;
 
-    obstacle_points_.points.push_back(p);
+      obstacle_points_.points.push_back(p);
+      cuboid_info_sort_.push_back(cuboid_info_[index[i].second]);
+    }
 
     coeff_velocity_ = index[0].first;
 
@@ -539,7 +556,30 @@ void DrivingNode::visualizationObstacle()
   obstacle_points_.color.g = 0.7;
   obstacle_points_.color.b = 1.0;
 
-  pub_object_point_.publish(obstacle_points_);  
+  for(size_t i=0; i<obstacle_points_.points.size(); i++)
+  {
+    double cx = obstacle_points_.points[i].x;
+    double cy = obstacle_points_.points[i].y;
+    double cz = obstacle_points_.points[i].z;
+
+    Eigen::Vector3d min_point, max_point;
+    double margin = 0.1;
+    min_point << cuboid_info_sort_[i].min_point.x-cx-margin,
+                 cuboid_info_sort_[i].min_point.y-cy-margin,
+                 cuboid_info_sort_[i].min_point.z-cz-margin;
+    max_point << cuboid_info_sort_[i].max_point.x-cx+margin,
+                 cuboid_info_sort_[i].max_point.y-cy+margin,
+                 cuboid_info_sort_[i].max_point.z-cz+margin;
+
+    Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+    pose.translation() = Eigen::Vector3d(cx, cy, cz);
+    visual_tools_->publishWireframeCuboid(pose, min_point, max_point, rvt::YELLOW, "Cuboid", (int)i+1);
+  }
+
+  visual_tools_->trigger();
+  visual_tools_->deleteAllMarkers();
+
+  pub_object_point_.publish(obstacle_points_);
 }
 
 void DrivingNode::calculateLineSegment()
@@ -661,10 +701,10 @@ void DrivingNode::calculateTargetVel(double &left_vel, double &right_vel)
 
   double turn_coeff_vel = 1.0;
   double angle = abs(delta_angle*RAD2DEG);
-//  if(angle >= 50)
-//  {
-//    turn_coeff_vel = 1.0 - (0.5/(180-50)*angle - 0.5*50/(180-50));
-//  }
+  //  if(angle >= 50)
+  //  {
+  //    turn_coeff_vel = 1.0 - (0.5/(180-50)*angle - 0.5*50/(180-50));
+  //  }
 
   double alpha = 0.05 + beta_*abs(tanh(delta_angle/border_ang_));
   right_vel = (1-alpha)*max_vel_ + alpha*max_vel_*(-tanh(delta_angle/border_ang_))*turn_coeff_vel;
