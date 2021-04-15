@@ -194,7 +194,7 @@ private:
   float stop_detect_range_;
   float max_detect_range_;
 
-  // Control Param
+  // Control Params
   float  beta_;               // chose 0.1~0.9 begger, turn faster
   float  min_vel_;            // for round case object detection
   float  max_vel_;            // straight speed m/s
@@ -202,9 +202,17 @@ private:
   float  border_dist_;        // boundary distance
   double border_ang_;         // boundary angle (deg -> rad) turn angle difference satuated at border_ang_
   float  virtual_point_dist_;
-
+  
   bool wait_flag_ = false;
   int  wait_cnt_ = 0;
+
+  // Cluster Params
+  float cluster_tolerance_;
+  int min_cluster_size_;
+
+  // Bounding Box Params
+  float min_height_;
+  float max_area_;
 };
 
 #endif /* driving_node_DRIVING_NODE_H_ */

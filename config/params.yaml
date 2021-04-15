@@ -2,17 +2,19 @@ waypoint_driving:
   pointcloud_topic: "velodyne_points"
   odom_topic: "hdl_localization/odom"  #lio_sam/mapping/odometry
   
-  velocity_filter: false
-  max_filter_size: 50
-  filter_size: 15
-  
+  # Range Params
   robot_width: 0.6              # [m]  
   parabola_axis: 1.5            # [m]
   parabola_p: 30
   surplus_range: 0.3            # [m]
   stop_detect_range: 0          # [m]
-  max_detect_range: 7.0         # [m]
+  max_detect_range: 8.0         # [m]
   
+  # Control Params
+  velocity_filter: false
+  max_filter_size: 50
+  filter_size: 15
+
   beta: 0.4                     # chose 0.1~0.9 begger, turn faster
   min_velocity: 0.3             # for round case object detection
   max_velocity: 1.0             # straight speed [m/s]
@@ -20,3 +22,11 @@ waypoint_driving:
   boundary_distance: 2.0        # turn_radius*2
   border_angle: 30              # [degree]
   virtual_point_distance: 1.0
+  
+  # Cluster Params
+  cluster_tolerance: 0.05       # [m]
+  min_cluster_size: 20          # [int]
+
+  # Bounding Box Params
+  min_height: 0.6               # [m]
+  max_area: 0.2                 # [m^2]

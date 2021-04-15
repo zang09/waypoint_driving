@@ -20,16 +20,16 @@ void DrivingNode::initParams()
   nh_.param<std::string>("/waypoint_driving/pointcloud_topic", pointcloud_topic_, " ");
   nh_.param<std::string>("/waypoint_driving/odom_topic", odom_topic_, " ");
 
-  nh_.param<bool>("/waypoint_driving/velocity_filter", velocity_filter_, true);
-  nh_.param<int>("/waypoint_driving/filter_size", filter_size_, 20);
-  nh_.param<int>("/waypoint_driving/max_filter_size", max_filter_size_, 50);
-
   nh_.param<float>("/waypoint_driving/robot_width", robot_width_, 1.0);
   nh_.param<float>("/waypoint_driving/parabola_axis", parabola_axis_, 1.5);
   nh_.param<int>("/waypoint_driving/parabola_p", parabola_p_, 30);
   nh_.param<float>("/waypoint_driving/surplus_range", surplus_range_, 0.8);
   nh_.param<float>("/waypoint_driving/stop_detect_range", stop_detect_range_, 2.0);
   nh_.param<float>("/waypoint_driving/max_detect_range", max_detect_range_, 8.0);
+  
+  nh_.param<bool>("/waypoint_driving/velocity_filter", velocity_filter_, true);
+  nh_.param<int>("/waypoint_driving/filter_size", filter_size_, 20);
+  nh_.param<int>("/waypoint_driving/max_filter_size", max_filter_size_, 50);
 
   nh_.param<float>("/waypoint_driving/beta", beta_, 0.5);
   nh_.param<float>("/waypoint_driving/min_velocity", min_vel_, 0.2);
@@ -39,6 +39,12 @@ void DrivingNode::initParams()
   nh_.param<double>("/waypoint_driving/border_angle", border_ang_, 30);
   border_ang_ *= DEG2RAD;
   nh_.param<float>("/waypoint_driving/virtual_point_distance", virtual_point_dist_, 1.5);
+  
+  nh_.param<float>("/waypoint_driving/cluster_tolerance_", cluster_tolerance_, 0.05);
+  nh_.param<int>("/waypoint_driving/min_cluster_size", min_cluster_size_, 20);
+
+  nh_.param<float>("/waypoint_driving/min_height", min_height_, 0.6);
+  nh_.param<float>("/waypoint_driving/max_area", max_area_, 0.2);
 
   left_velocity_.resize(max_filter_size_);
   right_velocity_.resize(max_filter_size_);
@@ -239,10 +245,17 @@ void DrivingNode::limitCloudView(pcl::PointCloud<PointType> cloud_in, pcl::Point
 
     distance = sqrt(x*x+y*y);
 
+    /*origin
     if ( y>(-0.3) && distance <= max_detect_range_ &&
          (y*y)-(4*parabola_p_*(x-(robot_width_/2+parabola_axis_)))>0 &&
          (y*y)+(4*parabola_p_*(x+(robot_width_/2+parabola_axis_)))>0 )
     {
+      inliers->indices.push_back(i);
+    }
+    */
+
+    //test
+    if (distance < max_detect_range_) {
       inliers->indices.push_back(i);
     }
   }
@@ -381,8 +394,8 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
 
   std::vector<pcl::PointIndices> cluster_indices;
   pcl::EuclideanClusterExtraction<PointType> ec;
-  ec.setClusterTolerance (0.05); // 0.15m
-  ec.setMinClusterSize (20);
+  ec.setClusterTolerance (cluster_tolerance_); // 0.15m
+  ec.setMinClusterSize (min_cluster_size_);
   //ec.setMaxClusterSize (2000);
   ec.setSearchMethod (tree);
   ec.setInputCloud (cloud_in_flat);
@@ -391,7 +404,7 @@ void DrivingNode::euclideanClusteredCloud(pcl::PointCloud<PointType> cloud_in, p
   //std::cout << "Number of clusters is equal to " << cluster_indices.size () << std::endl;
 
   pcl::PointCloud<PointType> total_cloud;
-  int i = 1;
+  int i = 0;
   for (std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin(); it!=cluster_indices.end(); ++it)
   {
     pcl::CentroidPoint<pcl::PointXYZ> centroid;
@@ -464,83 +477,106 @@ void DrivingNode::euclideanConditionalClusteredCloud(pcl::PointCloud<PointType> 
 
 void DrivingNode::perceptionObstacle()
 {
-  std::vector<std::pair<double, int>> index;
+  //obstacle_points_.points.clear();
+  //cuboid_info_sort_.clear();
 
-  //scoring obstacle
   for(int i=0; i<centroid_info_.size(); i++)
   {
-    double x = centroid_info_[i].x;
-    double y = centroid_info_[i].y;
-    double dist = sqrt(x*x + y*y);
-    double score;
-
-    if( abs(y) < (robot_width_/2.f + surplus_range_) ) /*straight case*/
-    {
-      if(dist < stop_detect_range_)
-      {
-        score = 0;
-        index.push_back(std::make_pair(score, i));
-
-        wait_cnt_  = 0;
-        wait_flag_ = true;
-        break;
-      }
-      else if(dist < max_detect_range_)
-      {
-        score = 1 - 1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
-        index.push_back(std::make_pair(score, i));
-      }
-    }
-    else /*round case*/
-    {
-      if(dist < max_detect_range_)
-      {
-        score = 1 - (1-min_vel_)/pow(max_detect_range_, 2)*pow(dist-max_detect_range_, 2);
-        index.push_back(std::make_pair(score, i));
-      }
-    }
-  }
-
-  obstacle_points_.points.clear();
-  cuboid_info_sort_.clear();
-  if(index.empty())
-  {
-    coeff_velocity_ = 1.0;
-  }
-  else
-  {
-    std::sort(index.begin(), index.end());
-
     geometry_msgs::Point p;
-    for(int i=0; i<index.size(); i++)
-    {
-      p.x = centroid_info_[index[i].second].x;
-      p.y = centroid_info_[index[i].second].y;
-      p.z = centroid_info_[index[i].second].z;
+    p.x = centroid_info_[i].x;
+    p.y = centroid_info_[i].y;
+    p.z = centroid_info_[i].z;
 
+    double height = cuboid_info_[i].max_point.z - cuboid_info_[i].min_point.z;
+    double area = (cuboid_info_[i].max_point.x-cuboid_info_[i].min_point.x)*(cuboid_info_[i].max_point.y-cuboid_info_[i].min_point.y);
+
+    if(height > min_height_ && area < max_area_)
+    {
+      std::cout << "Height: " << height << std::endl;
+      std::cout << "Area: " << area << std::endl;
       obstacle_points_.points.push_back(p);
-      cuboid_info_sort_.push_back(cuboid_info_[index[i].second]);
-    }
-
-    coeff_velocity_ = index[0].first;
-
-    double dist = sqrt(p.x*p.x + p.y*p.y);
-    //printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.4lf\n", dist, p.x, p.y, coeff_velocity_);
-  }
-
-  if(wait_flag_)
-  {
-    wait_cnt_++;
-    coeff_velocity_ = 0.0;
-
-    if(wait_cnt_ > 20) // 2s
-    {
-      fill(left_velocity_.begin(), left_velocity_.end(), 0);
-      fill(right_velocity_.begin(), right_velocity_.end(), 0);
-      wait_cnt_  = 0;
-      wait_flag_ = false;
+      cuboid_info_sort_.push_back(cuboid_info_[i]);
     }
   }
+  std::cout << "\n" << std::endl;
+
+//  std::vector<std::pair<double, int>> index;
+
+//  //scoring obstacle
+//  for(int i=0; i<centroid_info_.size(); i++)
+//  {
+//    double x = centroid_info_[i].x;
+//    double y = centroid_info_[i].y;
+//    double dist = sqrt(x*x + y*y);
+//    double score;
+
+//    if( abs(y) < (robot_width_/2.f + surplus_range_) ) /*straight case*/
+//    {
+//      if(dist < stop_detect_range_)
+//      {
+//        score = 0;
+//        index.push_back(std::make_pair(score, i));
+
+//        wait_cnt_  = 0;
+//        wait_flag_ = true;
+//        break;
+//      }
+//      else if(dist < max_detect_range_)
+//      {
+//        score = 1 - 1/pow(max_detect_range_-stop_detect_range_, 2)*pow(dist-max_detect_range_, 2);
+//        index.push_back(std::make_pair(score, i));
+//      }
+//    }
+//    else /*round case*/
+//    {
+//      if(dist < max_detect_range_)
+//      {
+//        score = 1 - (1-min_vel_)/pow(max_detect_range_, 2)*pow(dist-max_detect_range_, 2);
+//        index.push_back(std::make_pair(score, i));
+//      }
+//    }
+//  }
+
+//  obstacle_points_.points.clear();
+//  cuboid_info_sort_.clear();
+//  if(index.empty())
+//  {
+//    coeff_velocity_ = 1.0;
+//  }
+//  else
+//  {
+//    std::sort(index.begin(), index.end());
+
+//    geometry_msgs::Point p;
+//    for(int i=0; i<index.size(); i++)
+//    {
+//      p.x = centroid_info_[index[i].second].x;
+//      p.y = centroid_info_[index[i].second].y;
+//      p.z = centroid_info_[index[i].second].z;
+
+//      obstacle_points_.points.push_back(p);
+//      cuboid_info_sort_.push_back(cuboid_info_[index[i].second]);
+//    }
+
+//    coeff_velocity_ = index[0].first;
+
+//    double dist = sqrt(p.x*p.x + p.y*p.y);
+//    //printf("distance: %.2lf, x: %.2lf, y: %.2lf, score: %.4lf\n", dist, p.x, p.y, coeff_velocity_);
+//  }
+
+//  if(wait_flag_)
+//  {
+//    wait_cnt_++;
+//    coeff_velocity_ = 0.0;
+
+//    if(wait_cnt_ > 20) // 2s
+//    {
+//      fill(left_velocity_.begin(), left_velocity_.end(), 0);
+//      fill(right_velocity_.begin(), right_velocity_.end(), 0);
+//      wait_cnt_  = 0;
+//      wait_flag_ = false;
+//    }
+//  }
 }
 
 void DrivingNode::visualizationObstacle()
@@ -580,6 +616,9 @@ void DrivingNode::visualizationObstacle()
   visual_tools_->deleteAllMarkers();
 
   pub_object_point_.publish(obstacle_points_);
+
+  obstacle_points_.points.clear();
+  cuboid_info_sort_.clear();
 }
 
 void DrivingNode::calculateLineSegment()
