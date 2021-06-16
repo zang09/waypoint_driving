@@ -492,13 +492,12 @@ void DrivingNode::perceptionObstacle()
 
     if(height > min_height_ && area < max_area_)
     {
-      std::cout << "Height: " << height << std::endl;
-      std::cout << "Area: " << area << std::endl;
+      //std::cout << "Height: " << height << std::endl;
+      //std::cout << "Area: " << area << std::endl;
       obstacle_points_.points.push_back(p);
       cuboid_info_sort_.push_back(cuboid_info_[i]);
     }
   }
-  std::cout << "\n" << std::endl;
 
 //  std::vector<std::pair<double, int>> index;
 
